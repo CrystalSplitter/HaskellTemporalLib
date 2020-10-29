@@ -1,3 +1,5 @@
+{-# LANGUAGE TupleSections #-}
+
 module Stn where
 
 import           Data.Text                      ( Text
@@ -45,8 +47,8 @@ class SimpleTemporalNetwork f where
 
   dependentEvents :: (Ord a, Fractional b) => a -> f a b -> [((a, a), b)]
   dependentEvents fr n = let cnst' fr to n = if fr == to then Nothing else cnst fr to n
-                             binding to = (\x -> ((fr, to), x)) <$> cnst' fr to n
-                         in catMaybes [ binding to | to <- (events n)]
+                             binding to = ((fr, to),) <$> cnst' fr to n
+                         in catMaybes [ binding to | to <- events n]
 
 data STNMap a b = STNMap { getZEvent :: a, getMap :: M.Map (a, a) b } deriving (Show)
 
@@ -64,11 +66,10 @@ constrain fr to minVal maxVal = [((to, fr), negate minVal), ((fr, to), maxVal)]
 
 test = STNMap
   { getZEvent = 'z'
-  , getMap    = (  M.fromList
+  , getMap    = M.fromList
                 $  constrain 'z' 'a' 0.0 10.0
                 ++ constrain 'z' 'b' 0.0 10.0
                 ++ constrain 'a' 'b' 2.0 7.0
-                )
   }
 
 
@@ -90,7 +91,7 @@ floydWarshall e f = M.fromList
 
 minimiseNetwork
   :: (Ord a, SimpleTemporalNetwork n, Ord d, Fractional d)
-  => (n a d)
+  => n a d
   -> STNMap a d
 minimiseNetwork stn = STNMap
   { getZEvent = zEvent stn
@@ -103,8 +104,8 @@ pairings []       = []
 pairings (x : xs) = [ (x, other) | other <- xs ] ++ pairings xs
 
 isConsistent
-  :: (SimpleTemporalNetwork n, Ord a, Fractional d, Ord d) => (n a d) -> Bool
-isConsistent net = all (\(i, j) -> isOkay i j) pairs
+  :: (SimpleTemporalNetwork n, Ord a, Fractional d, Ord d) => n a d -> Bool
+isConsistent net = all (uncurry isOkay) pairs
  where
   pairs = pairings $ events net
   cnst' i j = fromMaybe inf $ cnst i j net
