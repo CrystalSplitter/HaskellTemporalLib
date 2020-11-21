@@ -48,7 +48,7 @@ class SimpleTemporalNetwork f where
   dependentEvents :: (Ord a, Fractional b) => a -> f a b -> [((a, a), b)]
   dependentEvents fr n = let cnst' fr to n = if fr == to then Nothing else cnst fr to n
                              binding to = ((fr, to),) <$> cnst' fr to n
-                         in catMaybes [ binding to | to <- events n]
+                          in catMaybes $ binding <$> events n
 
 data STNMap a b = STNMap { getZEvent :: a, getMap :: M.Map (a, a) b } deriving (Show)
 
