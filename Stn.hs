@@ -78,16 +78,31 @@ inf = 1.0 / 0.0
 
 -- | Generate an all-pairs shortest-path mapping between any two nodes of
 -- type `a`, with distance being of type `d`.
+--
+-- `e` is the list of nodes to schedule.
+-- `w` is a function which returns the weights between any two events.
 floydWarshall
   :: (Ord a, Ord d, Fractional d)
   => [a]
   -> ((a, a) -> Maybe d)
   -> M.Map (a, a) d
-floydWarshall e f = M.fromList
-  [ ((i, j), distUpdate i j k) | i <- e, j <- e, k <- e ]
+floydWarshall e w = floydWarshallRec eventGroups w
  where
-  distUpdate i j k = min (getDist i j) (getDist i k + getDist k j)
-  getDist x y = fromMaybe inf $ f (x, y)
+  eventGroups = [ (i, j, k) | k <- e, i <- e, j <- e ]
+  floydWarshallRec
+    :: (Ord a, Ord d, Fractional d)
+    => [(a, a, a)]
+    -> ((a, a) -> Maybe d)
+    -> M.Map (a, a) d
+  floydWarshallRec [] _ = mempty
+  floydWarshallRec ((i, j, k) : es) w' =
+    M.insert (i, j) distUpdated $ previousWeights
+   where
+    distUpdated = min (getDist i j) (getDist i k + getDist k j)
+    getDist x y =
+      fromMaybe (fromMaybe inf $ w' (x, y)) $ previousWeights M.!? (x, y)
+    previousWeights = floydWarshallRec es w'
+
 
 minimiseNetwork
   :: (Ord a, SimpleTemporalNetwork n, Ord d, Fractional d)
