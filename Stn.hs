@@ -113,14 +113,16 @@ floydWarshall e w = floydWarshallRec eventGroups w
     previousWeights = floydWarshallRec es w'
 
 
+-- | Minimise a Simple Temporal Networkp
 minimiseNetwork
   :: (Ord a, SimpleTemporalNetwork n, Ord d, Fractional d)
   => n a d
-  -> STNMap a d
-minimiseNetwork stn = STNMap
-  { getZEvent = zEvent stn
-  , getMap    = floydWarshall (events stn) (\(x, y) -> cnst x y stn)
-  }
+  -> Maybe (STNMap a d)
+minimiseNetwork stn = if isConsistent (newStn) then Just newStn else Nothing
+ where
+  newMap = floydWarshall (events stn) (\(x, y) -> cnst x y stn)
+  newStn = STNMap { getZEvent = zEvent stn, getMap = newMap }
+
 
 -- | Utility function to enumerate nC2 items.
 pairings :: [a] -> [(a, a)]
