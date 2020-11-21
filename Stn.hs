@@ -1,15 +1,24 @@
 {-# LANGUAGE TupleSections #-}
 
-module Stn where
+module Stn
+  ( STNMap(..)
+  , stnMapFromList
+  , SimpleTemporalNetwork(..)
+  , constrain
+  , minimiseNetwork
+  , inf
+  , smallestMakespanSchedule
+  )
+where
 
 import           Data.Text                      ( Text
                                                 , pack
                                                 , unpack
                                                 )
-import           GHC.Real                      as Real
-import           Data.Map                      as M
+import qualified GHC.Real                      as Real
+import qualified Data.Map                      as M
 import           Data.Maybe
-import           Data.Sequence                 as S
+import qualified Data.Sequence                 as S
 import           Data.List
 
 -- | Constraint, mapping from a start time to and end time,
@@ -24,13 +33,25 @@ class Constraint f where
   target :: f a b -> a
   nullConstraint :: (Fractional b) => a -> a -> f a b
 
+
 data LinCnst a b = LinCnst a a b deriving (Eq, Show)
+
 
 instance Constraint LinCnst where
   value (LinCnst _ _ c) = c
   source (LinCnst fr _ _) = fr
   target (LinCnst _ to _) = to
   nullConstraint fr to = LinCnst fr to (1.0 / 0.0)
+
+showBCnst :: (Show a, Fractional a) => (Maybe a, Maybe a) -> String
+showBCnst (rev, fwd) =
+  let f c = fromMaybe inf c
+  in  "[" ++ (show . negate . f) rev ++ "," ++ (show . f) fwd ++ "]"
+
+
+inf :: (Fractional a) => a
+inf = 1.0 / 0.0
+
 
 class SimpleTemporalNetwork f where
   -- | The origin (Z) event.
@@ -44,11 +65,67 @@ class SimpleTemporalNetwork f where
   -- First element is the reverse, second is the forward.
   bcnst :: (Ord a, Fractional b) => a -> a -> f a b -> (Maybe b, Maybe b)
   bcnst fr to n = (cnst to fr n, cnst fr to n)
+  -- | The bi-directional Z-constraint pair.
+  -- First element is the event -> z edge, second is the z -> event edge.
+  zBcnst :: (Ord a, Fractional b) => a -> f a b -> (Maybe b, Maybe b)
+  zBcnst e n = bcnst (zEvent n) e n
+
+  -- | Sets the constraint from the first event to the second event.
+  -- setCnst fromEvent toEvent value stn
+  setCnst :: (Ord a, Fractional b) => a -> a -> b -> f a b -> f a b
+
+  setBcnst :: (Ord a, Fractional b) => a -> a -> b -> b -> f a b -> f a b
+  setBcnst fr to minVal maxVal n = setCnst fr to maxVal $ setCnst to fr (-minVal) n
+
+  allZConstraints :: (Ord a, Fractional b) => f a b -> [(a, (Maybe b, Maybe b))]
+  allZConstraints n = (\e -> (e, zBcnst e n)) <$> events n
+
+  printer :: (Show a, Show b, Ord a, Ord b, Fractional b) => f a b -> [IO ()]
+  printer n = let zcns = sortOn ((fmap negate) . fst . snd) $ allZConstraints n
+                  formatter (e, b) = putStrLn $ show e ++ " in " ++ showBCnst b
+               in fmap formatter zcns
+
+  printAllZConstraints :: (Show a, Show b, Ord a, Ord b, Fractional b) => f a b -> IO [()]
+  printAllZConstraints n = do
+    sequence $ printer n
 
   dependentEvents :: (Ord a, Fractional b) => a -> f a b -> [((a, a), b)]
   dependentEvents fr n = let cnst' fr to n = if fr == to then Nothing else cnst fr to n
                              binding to = ((fr, to),) <$> cnst' fr to n
                           in catMaybes $ binding <$> events n
+
+  -- | Return either a Just with the event's fixed time or
+  -- return Nothing if the event is not fixed.
+  eventTime :: (Ord a, Fractional b, Eq b) => a -> f a b -> Maybe b
+  eventTime e n = let (rev, fwd) = zBcnst e n
+                      revEvaled = fromMaybe inf rev
+                      fwdEvaled = fromMaybe inf fwd
+                   in if (-revEvaled) == fwdEvaled then Just fwdEvaled else Nothing
+
+  -- | Return a tuple of the form (e, (Maybe reverse constraint, Maybe forward constraint))
+  -- where `e` is the LAST event which is part of a solution which has the shortest makespan.
+  earliestMakespan
+    :: (Ord a, Ord b, Fractional b) => f a b -> (a, (Maybe b, Maybe b))
+  earliestMakespan n = Data.List.foldr f (zEvent n, (Just inf, Just (-inf))) $ allZConstraints n
+   where
+    f arg1@(_, (rev1, _)) arg2@(_, (rev2, _)) =
+      if rev2 < rev1 then arg2 else arg1
+
+  -- | Return every event that has no assigned, fixed time.
+  unassignedEvents :: (Ord a, Eq b, Fractional b) => f a b -> [a]
+  unassignedEvents n
+    | events n == mempty = mempty
+    | otherwise = Data.List.filter (isNothing . flip eventTime n) $ events n
+
+  -- | Return whether or not this STN is consistent.
+  isConsistent :: (Ord a, Fractional b, Ord b) => f a b -> Bool
+  isConsistent net = all (uncurry isOkay) pairs
+   where
+    pairs = pairings $ events net
+    cnst' i j = fromMaybe inf $ cnst i j net
+    isOkay i j = cnst' i j >= (-cnst' j i)
+
+
 
 data STNMap a b = STNMap { getZEvent :: a, getMap :: M.Map (a, a) b } deriving (Show)
 
@@ -65,25 +142,16 @@ instance SimpleTemporalNetwork STNMap where
   zEvent n = getZEvent n
   events n = uniqueEvents
    where
-    eventGroups  = (\(x, y) -> [x, y]) <$> (M.keys . getMap) n
     uniqueEvents = (nub . concat) eventGroups
+    eventGroups  = (\(x, y) -> [x, y]) <$> (M.keys . getMap) n
   cnst fr to n = if fr == to then Just 0.0 else M.lookup (fr, to) $ getMap n
+  setCnst fr to val n = STNMap { getZEvent = getZEvent n, getMap = newMap }
+    where newMap = M.insert (fr, to) val $ getMap n
 
 
 constrain :: (Num b) => a -> a -> b -> b -> [((a, a), b)]
 constrain fr to minVal maxVal = [((to, fr), negate minVal), ((fr, to), maxVal)]
 
-test = STNMap
-  { getZEvent = 'z'
-  , getMap    = M.fromList
-                $  constrain 'z' 'a' 0.0 10.0
-                ++ constrain 'z' 'b' 0.0 10.0
-                ++ constrain 'a' 'b' 2.0 7.0
-  }
-
-
-inf :: (Fractional a) => a
-inf = 1.0 / 0.0
 
 -- | Generate an all-pairs shortest-path mapping between any two nodes of
 -- type `a`, with distance being of type `d`.
@@ -129,10 +197,57 @@ pairings :: [a] -> [(a, a)]
 pairings []       = []
 pairings (x : xs) = [ (x, other) | other <- xs ] ++ pairings xs
 
-isConsistent
-  :: (SimpleTemporalNetwork n, Ord a, Fractional d, Ord d) => n a d -> Bool
-isConsistent net = all (uncurry isOkay) pairs
+
+
+assignEvent
+  :: (SimpleTemporalNetwork n, Ord a, Ord d, Fractional d)
+  => a
+  -> d
+  -> n a d
+  -> n a d
+assignEvent e val stn = setBcnst (zEvent stn) e val val stn
+
+smallestMakespanSchedule
+  :: (Ord a, Ord d, Fractional d) => STNMap a d -> Maybe (STNMap a d)
+smallestMakespanSchedule n = go $ smsFirstIter n
  where
-  pairs = pairings $ events net
-  cnst' i j = fromMaybe inf $ cnst i j net
-  isOkay i j = cnst' i j >= (-cnst' j i)
+  go :: (Ord a, Ord d, Fractional d) => Maybe (STNMap a d) -> Maybe (STNMap a d)
+  go Nothing = Nothing
+  go (Just stn) |
+    -- If all events have fixed times, then we're done!
+                  unassignedEvents stn == mempty = return stn
+                |
+    -- Still some events to assign.
+                  otherwise = go $ updateAllEdges =<< updatedStn
+   where
+    updatedStn =
+      (\x -> assignEvent nextUnassigned x stn) <$> nextUnassignedMinBound
+    nextUnassigned         = head $ unassignedEvents stn
+    nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
+    updateAllEdges         = minimiseNetwork
+
+
+smsFirstIter :: (Ord a, Ord d, Fractional d) => STNMap a d -> Maybe (STNMap a d)
+smsFirstIter m =
+  let miniM = minimiseNetwork m
+      mkspanM x = fmap negate (fst $ snd $ earliestMakespan x)
+      newConstraintM = miniM >>= mkspanM
+      finalEvent x = fst $ earliestMakespan x
+      -- Define some wrappers around assignEvent so it be used with Maybes
+      updateStn Nothing  _        = Nothing
+      updateStn _        Nothing  = Nothing
+      updateStn (Just c) (Just n) = Just $ assignEvent (finalEvent n) c n
+  in  updateStn newConstraintM miniM
+
+
+{-
+  ==============================================================================
+-}
+
+test =
+  stnMapFromList 'z'
+    $  constrain 'z' 'a' 10.0    10.0
+    ++ constrain 'a' 'b' 200.0   200.0
+    ++ constrain 'b' 'c' 300.0   3000.0
+    ++ constrain 'c' 'd' 40000.0 40000.0
+
