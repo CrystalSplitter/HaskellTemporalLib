@@ -52,6 +52,15 @@ class SimpleTemporalNetwork f where
 
 data STNMap a b = STNMap { getZEvent :: a, getMap :: M.Map (a, a) b } deriving (Show)
 
+
+-- | Build an STNMap object from a list.
+-- If multiple constraints are specified for the same event pairs, then the tighter one
+-- is stored in the network.
+stnMapFromList :: (Ord a, Ord b) => a -> [((a, a), b)] -> STNMap a b
+stnMapFromList z xs = STNMap { getZEvent = z, getMap = builtMap }
+  where builtMap = M.fromListWith (\new old -> min new old) xs
+
+
 instance SimpleTemporalNetwork STNMap where
   zEvent n = getZEvent n
   events n = uniqueEvents
