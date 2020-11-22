@@ -11,37 +11,17 @@ module Stn
   )
 where
 
-import           Data.Text                      ( Text
-                                                , pack
-                                                , unpack
-                                                )
-import qualified GHC.Real                      as Real
 import qualified Data.Map                      as M
 import           Data.Maybe
-import qualified Data.Sequence                 as S
 import           Data.List
 
 -- | Constraint, mapping from a start time to and end time,
--- Representing t_e - t_s <= Cse
 --
--- >>> let from = pack "Start Time"
--- >>> let to = pack "End Time"
--- >>> LinCnst from to 5.0
-class Constraint f where
-  value :: (Num b) => f a b -> b
-  source :: f a b -> a
-  target :: f a b -> a
-  nullConstraint :: (Fractional b) => a -> a -> f a b
 
+-- | A Bidirectional Linear Constraint
+-- This represents -Ces <= t_e - t_s <= Cse
+type Bidirectional b = (Maybe b, Maybe b)
 
-data LinCnst a b = LinCnst a a b deriving (Eq, Show)
-
-
-instance Constraint LinCnst where
-  value (LinCnst _ _ c) = c
-  source (LinCnst fr _ _) = fr
-  target (LinCnst _ to _) = to
-  nullConstraint fr to = LinCnst fr to (1.0 / 0.0)
 
 showBCnst :: (Show a, Fractional a) => (Maybe a, Maybe a) -> String
 showBCnst (rev, fwd) =
@@ -63,11 +43,11 @@ class SimpleTemporalNetwork f where
   cnst :: (Ord a, Fractional b) => a -> a -> f a b -> Maybe b
   -- | The bi-directional constaint pair.
   -- First element is the reverse, second is the forward.
-  bcnst :: (Ord a, Fractional b) => a -> a -> f a b -> (Maybe b, Maybe b)
+  bcnst :: (Ord a, Fractional b) => a -> a -> f a b -> Bidirectional b
   bcnst fr to n = (cnst to fr n, cnst fr to n)
   -- | The bi-directional Z-constraint pair.
   -- First element is the event -> z edge, second is the z -> event edge.
-  zBcnst :: (Ord a, Fractional b) => a -> f a b -> (Maybe b, Maybe b)
+  zBcnst :: (Ord a, Fractional b) => a -> f a b -> Bidirectional b
   zBcnst e n = bcnst (zEvent n) e n
 
   -- | Sets the constraint from the first event to the second event.
@@ -77,11 +57,11 @@ class SimpleTemporalNetwork f where
   setBcnst :: (Ord a, Fractional b) => a -> a -> b -> b -> f a b -> f a b
   setBcnst fr to minVal maxVal n = setCnst fr to maxVal $ setCnst to fr (-minVal) n
 
-  allZConstraints :: (Ord a, Fractional b) => f a b -> [(a, (Maybe b, Maybe b))]
+  allZConstraints :: (Ord a, Fractional b) => f a b -> [(a, Bidirectional b)]
   allZConstraints n = (\e -> (e, zBcnst e n)) <$> events n
 
   printer :: (Show a, Show b, Ord a, Ord b, Fractional b) => f a b -> [IO ()]
-  printer n = let zcns = sortOn ((fmap negate) . fst . snd) $ allZConstraints n
+  printer n = let zcns = Data.List.sortOn (fmap negate . fst . snd) $ allZConstraints n
                   formatter (e, b) = putStrLn $ show e ++ " in " ++ showBCnst b
                in fmap formatter zcns
 
@@ -105,7 +85,7 @@ class SimpleTemporalNetwork f where
   -- | Return a tuple of the form (e, (Maybe reverse constraint, Maybe forward constraint))
   -- where `e` is the LAST event which is part of a solution which has the shortest makespan.
   earliestMakespan
-    :: (Ord a, Ord b, Fractional b) => f a b -> (a, (Maybe b, Maybe b))
+    :: (Ord a, Ord b, Fractional b) => f a b -> (a, Bidirectional b)
   earliestMakespan n = Data.List.foldr f (zEvent n, (Just inf, Just (-inf))) $ allZConstraints n
    where
     f arg1@(_, (rev1, _)) arg2@(_, (rev2, _)) =
@@ -135,7 +115,7 @@ data STNMap a b = STNMap { getZEvent :: a, getMap :: M.Map (a, a) b } deriving (
 -- is stored in the network.
 stnMapFromList :: (Ord a, Ord b) => a -> [((a, a), b)] -> STNMap a b
 stnMapFromList z xs = STNMap { getZEvent = z, getMap = builtMap }
-  where builtMap = M.fromListWith (\new old -> min new old) xs
+  where builtMap = M.fromListWith min xs
 
 
 instance SimpleTemporalNetwork STNMap where
@@ -163,7 +143,7 @@ floydWarshall
   => [a]
   -> ((a, a) -> Maybe d)
   -> M.Map (a, a) d
-floydWarshall e w = floydWarshallRec eventGroups w
+floydWarshall e = floydWarshallRec eventGroups
  where
   eventGroups = [ (i, j, k) | k <- e, i <- e, j <- e ]
   floydWarshallRec
@@ -173,7 +153,7 @@ floydWarshall e w = floydWarshallRec eventGroups w
     -> M.Map (a, a) d
   floydWarshallRec [] _ = mempty
   floydWarshallRec ((i, j, k) : es) w' =
-    M.insert (i, j) distUpdated $ previousWeights
+    M.insert (i, j) distUpdated previousWeights
    where
     distUpdated = min (getDist i j) (getDist i k + getDist k j)
     getDist x y =
@@ -186,7 +166,7 @@ minimiseNetwork
   :: (Ord a, SimpleTemporalNetwork n, Ord d, Fractional d)
   => n a d
   -> Maybe (STNMap a d)
-minimiseNetwork stn = if isConsistent (newStn) then Just newStn else Nothing
+minimiseNetwork stn = if isConsistent newStn then Just newStn else Nothing
  where
   newMap = floydWarshall (events stn) (\(x, y) -> cnst x y stn)
   newStn = STNMap { getZEvent = zEvent stn, getMap = newMap }
@@ -198,7 +178,6 @@ pairings []       = []
 pairings (x : xs) = [ (x, other) | other <- xs ] ++ pairings xs
 
 
-
 assignEvent
   :: (SimpleTemporalNetwork n, Ord a, Ord d, Fractional d)
   => a
@@ -206,6 +185,7 @@ assignEvent
   -> n a d
   -> n a d
 assignEvent e val stn = setBcnst (zEvent stn) e val val stn
+
 
 smallestMakespanSchedule
   :: (Ord a, Ord d, Fractional d) => STNMap a d -> Maybe (STNMap a d)
@@ -224,6 +204,8 @@ smallestMakespanSchedule n = go $ smsFirstIter n
       (\x -> assignEvent nextUnassigned x stn) <$> nextUnassignedMinBound
     nextUnassigned         = head $ unassignedEvents stn
     nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
+    -- Function alias for minimisation. We should replace this with the O(n^2)
+    -- algorithm.
     updateAllEdges         = minimiseNetwork
 
 
@@ -250,4 +232,3 @@ test =
     ++ constrain 'a' 'b' 200.0   200.0
     ++ constrain 'b' 'c' 300.0   3000.0
     ++ constrain 'c' 'd' 40000.0 40000.0
-
