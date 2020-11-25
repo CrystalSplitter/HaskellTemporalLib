@@ -9,7 +9,7 @@ import qualified Data.Map.Strict as M'
 type NewConstraint v e = ((v, v), e)
 
 {-|
-  Iterative Full Path Consistency.
+  Incemental Full Path Consistency.
 
   Takes in a new constraint, a Foldable of vertices, and an
   all-pairs-shortest-path distance Map.
