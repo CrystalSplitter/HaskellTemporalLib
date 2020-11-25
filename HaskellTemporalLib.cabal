@@ -7,7 +7,7 @@ version:             0.1.0.0
 -- synopsis:
 -- description:
 -- bug-reports:
--- license:
+license:             LGPL-3.0-only
 license-file:        LICENSE
 author:              CrystalSplitter
 maintainer:          null
@@ -16,11 +16,13 @@ maintainer:          null
 extra-source-files:  CHANGELOG.md
 
 library
-  exposed-modules:     Stn
+  exposed-modules:     HaskellTemporalLib.Stn
+                       , HaskellTemporalLib.IFPC
   -- other-modules:
   -- other-extensions:
   build-depends:       base ^>=4.12.0.0
                        , containers
                        , text
-  -- hs-source-dirs:
+                       , mtl
+  hs-source-dirs:      src
   default-language:    Haskell2010

@@ -1,6 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 
-module Stn
+module HaskellTemporalLib.Stn
   ( STNMap(..)
   , SimpleTemporalNetwork(..)
   , constrain
@@ -10,8 +10,10 @@ module Stn
 where
 
 import qualified Data.Map                      as M
+import qualified Data.Map.Strict               as M'
 import           Data.Maybe
 import           Data.List
+import qualified Data.Set                      as Set
 
 -- | Constraint, mapping from a start time to and end time,
 --
@@ -170,6 +172,9 @@ floydWarshall e = floydWarshallRec eventGroups
     getDist x y =
       fromMaybe (fromMaybe inf (w' (x, y))) (previousWeights M.!? (x, y))
     previousWeights = floydWarshallRec es w'
+
+headM []      = Nothing
+headM (x : _) = Just x
 
 
 -- | Utility function to enumerate nC2 items.
