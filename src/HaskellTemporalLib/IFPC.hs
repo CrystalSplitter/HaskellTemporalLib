@@ -24,20 +24,20 @@ ifpc :: (Foldable f, Ord v, Ord w, Num w)
   -> f v                      -- ^ A foldable holding graph vertices.
   -> M'.Map (v, v) w          -- ^ A APSP distance map between any two vertices.
   -> Maybe (M'.Map (v, v) w)  -- ^ A Maybe of a new APSP distance map.
-ifpc (edge_ab, w'_ab) verts wm
+ifpc (edge_ab, w'_ab) vs wm
   | w'_ab + w_ab < 0 = Nothing
   | w'_ab >= w_ab = return wm
   | otherwise = return $ weights loop2Result
   where w_ab = wm M'.! edge_ab
         context = IFPCContext
           { weights = M'.insert edge_ab w'_ab wm
-          , verts = verts
+          , verts = vs
           , checkSetJ = Set.empty
           , checkSetI = Set.empty
           }
 
         -- The result of the loops.
-        loop1Result = ifpcLoop1 edge_ab verts context
+        loop1Result = ifpcLoop1 edge_ab vs context
         loop2Result = ifpcLoop2 edge_ab loop1Result
 
 
@@ -55,13 +55,13 @@ data IFPCContext vert dist vertContainer = IFPCContext
 
 ifpcLoop1 :: (Foldable f, Ord v, Ord w, Num w) =>
   (v, v) -> f v -> IFPCContext v w (f v) ->  IFPCContext v w (f v)
-ifpcLoop1 edge@(a, b) verts context
-  | null verts = context
+ifpcLoop1 edge@(a, b) vs context
+  | null vs = context
   | otherwise = foldr (ifpcLoop1Inner edge) context filteredVerts
-  where filteredVerts = filter (\v -> (v /= a) && (v /= b)) $ foldr (:) [] verts
+  where filteredVerts = filter (\v -> (v /= a) && (v /= b)) $ foldr (:) [] vs
 
 
-ifpcLoop1Inner :: (Foldable f, Ord v, Ord w, Num w) =>
+ifpcLoop1Inner :: (Ord v, Ord w, Num w) =>
    (v, v) -> v -> IFPCContext v w (f v) -> IFPCContext v w (f v)
 ifpcLoop1Inner (a, b) k context =
       IFPCContext
@@ -97,7 +97,7 @@ ifpcLoop1Inner (a, b) k context =
               else checkSetJ context
 
 
-ifpcLoop2 :: (Foldable f, Ord v, Ord w, Num w) =>
+ifpcLoop2 :: (Ord v, Ord w, Num w) =>
   (v, v) -> IFPCContext v w (f v) -> IFPCContext v w (f v)
 ifpcLoop2 (a, _) context =
   foldr (ifpcLoop2Inner a) context ijGroup
@@ -108,7 +108,7 @@ ifpcLoop2 (a, _) context =
                   ]
 
 
-ifpcLoop2Inner :: (Foldable f, Ord v, Ord w, Num w) =>
+ifpcLoop2Inner :: (Ord v, Ord w, Num w) =>
   v -> (v, v) -> IFPCContext v w (f v) -> IFPCContext v w (f v)
 ifpcLoop2Inner a (i, j) context
   = update context

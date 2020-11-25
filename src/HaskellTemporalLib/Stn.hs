@@ -13,7 +13,6 @@ import qualified Data.Map                      as M
 import qualified Data.Map.Strict               as M'
 import           Data.Maybe
 import           Data.List
-import qualified Data.Set                      as Set
 
 -- | Constraint, mapping from a start time to and end time,
 --
@@ -70,8 +69,8 @@ class SimpleTemporalNetwork f where
     mapM_ putStrLn $ printer n
 
   dependentEvents :: (Ord a, Fractional b) => a -> f a b -> [((a, a), b)]
-  dependentEvents fr n = let cnst' fr to n = if fr == to then Nothing else cnst fr to n
-                             binding to = ((fr, to),) <$> cnst' fr to n
+  dependentEvents fr n = let cnst' t = if fr == t then Nothing else cnst fr t n
+                             binding to = ((fr, to),) <$> cnst' to
                           in catMaybes $ binding <$> events n
 
   -- | Return a Maybe with the event's fixed time. Nothing if the event is not fixed.
@@ -173,9 +172,6 @@ floydWarshall e = floydWarshallRec eventGroups
       fromMaybe (fromMaybe inf (w' (x, y))) (previousWeights M.!? (x, y))
     previousWeights = floydWarshallRec es w'
 
-headM []      = Nothing
-headM (x : _) = Just x
-
 
 -- | Utility function to enumerate nC2 items.
 pairings :: [a] -> [(a, a)]
@@ -184,7 +180,7 @@ pairings (x : xs) = [ (x, other) | other <- xs ] ++ pairings xs
 
 
 assignEvent
-  :: (SimpleTemporalNetwork n, Ord a, Ord d, Fractional d)
+  :: (SimpleTemporalNetwork n, Ord a, Fractional d)
   => a
   -> d
   -> n a d
