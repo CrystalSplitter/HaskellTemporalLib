@@ -15,6 +15,9 @@ maintainer:          null
 -- category:
 extra-source-files:  CHANGELOG.md
 
+ghc-options:
+
+
 library
   exposed-modules:     HaskellTemporalLib.Stn
                        , HaskellTemporalLib.IFPC
@@ -24,5 +27,29 @@ library
                        , containers
                        , text
                        , mtl
+                       , HUnit
+                       , test-framework
+                       , test-framework-hunit
   hs-source-dirs:      src
+  default-language:    Haskell2010
+  ghc-options:         -Wall 
+                       -Wredundant-constraints
+                       -Wincomplete-record-updates
+                       -Wincomplete-uni-patterns
+                       -Widentities
+
+test-suite             HTLSuite
+  type:                exitcode-stdio-1.0
+  main-is:             TestMain.hs
+  hs-source-dirs:      test
+  other-modules:       QCIFPC
+  
+  -- Required 'test-framework' as per Risto-Stev's gist:
+  -- https://gist.github.com/Risto-Stevcev/a9798abc898fba99235b
+  build-depends:       base
+                       , HUnit
+                       , test-framework
+                       , test-framework-hunit
+                       , containers
+                       , HaskellTemporalLib
   default-language:    Haskell2010
