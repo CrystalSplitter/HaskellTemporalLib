@@ -1,7 +1,7 @@
 module Main where
 
 import Test.Framework
-import qualified QCIFPC
+import qualified QCGraph
 
 main :: IO ()
-main = defaultMain QCIFPC.tests
+main = defaultMain QCGraph.tests

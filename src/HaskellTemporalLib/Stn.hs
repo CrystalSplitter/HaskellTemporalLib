@@ -9,6 +9,7 @@ module HaskellTemporalLib.Stn
   )
 where
 
+import HaskellTemporalLib.Graph                      (floydWarshall, ifpc)
 import qualified Data.Map                      as M
 import qualified Data.Map.Strict               as M'
 import           Data.Maybe
@@ -109,8 +110,11 @@ class SimpleTemporalNetwork f where
   fromList :: (Ord a, Ord b) => a -> [((a, a), b)] -> f a b
 
   -- | Build an STN object from a Map.
-  fromMap :: (Ord a, Ord b) => a -> M.Map (a, a) b -> f a b
+  fromMap :: (Ord a, Ord b) => a -> M'.Map (a, a) b -> f a b
   fromMap z m = fromList z $ M.toList m
+
+  -- | Convert the STN to a strict Map object.
+  toMap :: f a b -> M'.Map (a, a) b
 
   -- | Minimise a Simple Temporal Network
   minimiseNetwork
@@ -138,39 +142,11 @@ instance SimpleTemporalNetwork STNMap where
   fromList z xs = STNMap { getZEvent = z, mapData = builtMap }
     where builtMap = M.fromListWith min xs
   fromMap z m = STNMap { getZEvent = z, mapData = m }
+  toMap n = mapData n
 
 
 constrain :: (Num b) => node -> node -> b -> b -> [((node, node), b)]
 constrain fr to minVal maxVal = [((to, fr), negate minVal), ((fr, to), maxVal)]
-
-
--- | Generate an all-pairs shortest-path mapping between any two nodes.
---
--- `e` is the list of nodes to schedule.
--- `w` is a function which returns the weights between any two events.
--- >>> floydwarshall eventList weightFunction
-floydWarshall
-  :: (Ord node, Ord dist, Fractional dist)
-  => [node]
-  -> ((node, node) -> Maybe dist)
-  -> M.Map (node, node) dist
-floydWarshall e = floydWarshallRec eventGroups
- where
-  eventGroups = [ (i, j, k) | k <- e, i <- e, j <- e ]
-  floydWarshallRec
-    :: (Ord node, Ord dist, Fractional dist)
-    => [(node, node, node)]
-    -> ((node, node) -> Maybe dist)
-    -> M.Map (node, node) dist
-  floydWarshallRec []               _  = mempty
-  floydWarshallRec ((i, j, k) : es) w' = M.insert (i, j)
-                                                  distUpdated
-                                                  previousWeights
-   where
-    distUpdated = min (getDist i j) (getDist i k + getDist k j)
-    getDist x y =
-      fromMaybe (fromMaybe inf (w' (x, y))) (previousWeights M.!? (x, y))
-    previousWeights = floydWarshallRec es w'
 
 
 -- | Utility function to enumerate nC2 items.
@@ -212,7 +188,7 @@ smallestMakespanSchedule n = go $ smsFirstIter n
     nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
     -- Function alias for minimisation. We should replace this with the O(n^2)
     -- algorithm.
-    updateAllEdges         = minimiseNetwork
+    updateAllEdges x = ifpc ((nextUnassigned, (zEvent stn)) x) (events stn) (toMap stn)
 
 
 smsFirstIter

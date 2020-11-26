@@ -20,12 +20,15 @@ ghc-options:
 
 library
   exposed-modules:     HaskellTemporalLib.Stn
-                       , HaskellTemporalLib.IFPC
+                       , HaskellTemporalLib.Graph
   -- other-modules:
   -- other-extensions:
+
+  -- We're adding test-framework here so that our language
+  -- client picks it up. There's better ways, but for now
+  -- this will work.
   build-depends:       base ^>=4.12.0.0
                        , containers
-                       , text
                        , mtl
                        , HUnit
                        , test-framework
@@ -42,7 +45,7 @@ test-suite             HTLSuite
   type:                exitcode-stdio-1.0
   main-is:             TestMain.hs
   hs-source-dirs:      test
-  other-modules:       QCIFPC
+  other-modules:       QCGraph
   
   -- Required 'test-framework' as per Risto-Stev's gist:
   -- https://gist.github.com/Risto-Stevcev/a9798abc898fba99235b
