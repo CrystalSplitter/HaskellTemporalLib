@@ -108,6 +108,7 @@ class SimpleTemporalNetwork f where
   -- If multiple constraints are specified for the same event pairs, then the tighter one
   -- is stored in the network.
   fromList :: (Ord a, Ord b) => a -> [((a, a), b)] -> f a b
+  fromList z xs = fromMap z $ M'.fromList xs
 
   -- | Build an STN object from a Map.
   fromMap :: (Ord a, Ord b) => a -> M'.Map (a, a) b -> f a b
@@ -117,6 +118,8 @@ class SimpleTemporalNetwork f where
   toMap :: f a b -> M'.Map (a, a) b
 
   -- | Minimise a Simple Temporal Network
+  -- Conducts an All-Pairs-Shortest-Path minimisation on the network graph.
+  -- Complexity dependent on specific implementation.
   minimiseNetwork
     :: (Ord a, Ord d, Fractional d)
     => f a d
@@ -175,20 +178,19 @@ smallestMakespanSchedule n = go $ smsFirstIter n
     => Maybe (n a d)
     -> Maybe (n a d)
   go Nothing = Nothing
-  go (Just stn) |
+  go (Just stn)
     -- If all events have fixed times, then we're done!
-                  unassignedEvents stn == mempty = return stn
-                |
+    | null $ unassignedEvents stn = return stn
     -- Still some events to assign.
-                  otherwise = go $ updateAllEdges =<< updatedStn
-   where
-    updatedStn =
-      (\x -> assignEvent nextUnassigned x stn) <$> nextUnassignedMinBound
-    nextUnassigned         = head $ unassignedEvents stn
-    nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
-    -- Function alias for minimisation. We should replace this with the O(n^2)
-    -- algorithm.
-    updateAllEdges x = ifpc ((nextUnassigned, (zEvent stn)) x) (events stn) (toMap stn)
+    | otherwise = go updatedStn
+    where
+      nextUnassigned         = head $ unassignedEvents stn
+      nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
+      newConstraintM = ((nextUnassigned, zEvent stn),) <$> nextUnassignedMinBound
+      -- The lines below here can be replaced with any suitable
+      -- partial minimasation.
+      newWeights = newConstraintM >>= \x -> ifpc x (events stn) (toMap stn)
+      updatedStn = fromMap (zEvent stn) <$> newWeights
 
 
 smsFirstIter
@@ -211,9 +213,3 @@ smsFirstIter m =
   ==============================================================================
 -}
 
-test =
-  fromList 'z'
-  $  constrain 'z' 'a' 10.0    10.0
-  ++ constrain 'a' 'b' 200.0   200.0
-  ++ constrain 'b' 'c' 300.0   3000.0
-  ++ constrain 'c' 'd' 40000.0 40000.0 :: STNMap Char Double
