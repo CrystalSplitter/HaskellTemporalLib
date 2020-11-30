@@ -1,6 +1,7 @@
-module HaskellTemporalLib.Graph
+module HaskellTemporalLib.Internal.Graph
 ( ifpc
 , floydWarshall
+, NewConstraint
 ) where
 
 import Data.Maybe (fromMaybe)
@@ -10,7 +11,7 @@ import qualified Data.Map.Strict as M'
 type NewConstraint v e = ((v, v), e)
 
 {-|
-  Incemental Full Path Consistency.
+  Incremental Full Path Consistency.
 
   Takes in a new constraint, a Foldable of vertices, and an
   all-pairs-shortest-path distance Map.

@@ -7,12 +7,13 @@ import Test.Framework.Providers.HUnit (hUnitTestToTests)
 import Test.HUnit as HUnit
   ( assertEqual
   , assertBool
-  , Test(..))
+  , Test(..)
+  )
 
 import Data.Maybe
 import Data.Map.Strict (Map, fromList, lookup, insert)
 
-import HaskellTemporalLib.Graph (ifpc, floydWarshall)
+import HaskellTemporalLib.Tools (ifpc, floydWarshall)
 
 -- Tests to export.
 
@@ -43,6 +44,7 @@ weights = fromList [ ((1, 2), 14.0)
                    , ((3, 3), 0.0)
                    ]
 
+
 tIFPC1 :: Test
 tIFPC1 = TestLabel "Identity"
   (TestCase
@@ -50,6 +52,7 @@ tIFPC1 = TestLabel "Identity"
       (fromJust (ifpc ((1, 2), 14.0) verts weights)) weights
     )
   )
+
 
 tIFPC2 :: Test
 tIFPC2 = TestLabel "Relaxed"
@@ -59,6 +62,7 @@ tIFPC2 = TestLabel "Relaxed"
     )
   )
 
+
 tIFPC3 :: Test
 tIFPC3 = TestLabel "Tighten"
   (TestCase
@@ -66,6 +70,7 @@ tIFPC3 = TestLabel "Tighten"
       (fromJust (ifpc ((1, 2), 10.0) verts weights) /= weights)
     )
   )
+
 
 tIFPC4 :: Test
 tIFPC4 = TestLabel "APSP Comparison 1"
@@ -75,6 +80,7 @@ tIFPC4 = TestLabel "APSP Comparison 1"
       (fromJust (ifpc ((1, 2), 10.0) verts weights))
     )
   )
+
 
 tFloydWarshall1 :: Test
 tFloydWarshall1 = TestLabel "Repeat minimisation"
