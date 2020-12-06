@@ -26,12 +26,13 @@ library
     , HaskellTemporalLib.Internal.MinimalSTN
     , HaskellTemporalLib.Internal.STNMap
     , HaskellTemporalLib.Internal.Stn
+    , HaskellTemporalLib.Internal.Schedules
 
   -- We're adding test-framework here so that our language
   -- client picks it up. There's better ways, but for now
   -- this will work.
   build-depends:
-    base ^>=4.12.0.0
+    base >= 4.12.0.0
     , containers
     , mtl
     , HUnit
@@ -63,7 +64,7 @@ test-suite HTLSuite
   -- Required 'test-framework' as per Risto-Stevcev's gist:
   -- https://gist.github.com/Risto-Stevcev/a9798abc898fba99235b
   build-depends:
-    base ^>=4.12.0.0
+    base >= 4.12.0.0
     , HUnit
     , test-framework
     , test-framework-hunit
