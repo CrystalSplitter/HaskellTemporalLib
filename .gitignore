@@ -1,2 +1,5 @@
 dist-newstyle/
 tmp/
+
+# hlint generated report
+report.html
