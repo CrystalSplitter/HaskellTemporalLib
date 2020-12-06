@@ -4,10 +4,16 @@ module HaskellTemporalLib.Internal.MinimalSTN
   )
 where
 
+
 import HaskellTemporalLib.Internal.Stn (SimpleTemporalNetwork(..))
 import HaskellTemporalLib.Internal.Graph (floydWarshall)
 
-newtype MinimalSTN n event weight = MinimalSTN (n event weight)
+-- | Wrapper type to indicate minimality at compile time.
+-- With a minimal STN, you can conduct iterative minimisations on the
+-- contained data.
+newtype MinimalSTN n event weight
+  = MinimalSTN (n event weight) deriving (Show, Eq)
+
 
 instance (SimpleTemporalNetwork n) => SimpleTemporalNetwork (MinimalSTN n) where
   zEvent (MinimalSTN net) = zEvent net
@@ -17,6 +23,7 @@ instance (SimpleTemporalNetwork n) => SimpleTemporalNetwork (MinimalSTN n) where
   fromMap z m = MinimalSTN (fromMap z m)
   toMap (MinimalSTN net) = toMap net
 
+
 -- | Remove minimisation guarantees and return the wrapped STN.
 --
 -- The underlying data remains unchanged, but you will no longer be able to
@@ -24,16 +31,19 @@ instance (SimpleTemporalNetwork n) => SimpleTemporalNetwork (MinimalSTN n) where
 generalise :: MinimalSTN n event weight -> n event weight
 generalise (MinimalSTN x) = x
 
+
 -- | Minimise a Simple Temporal Network
 -- Conducts an All-Pairs-Shortest-Path minimisation on the network graph.
 -- Complexity dependent on specific implementation.
 --
--- Returns a MinimalSTN wrapper type around the passed in SimpleTemporalNetwork
--- type.
+-- Returns a Maybe MinimalSTN wrapper type around the passed in
+-- SimpleTemporalNetwork type.
 minimise
-  :: (SimpleTemporalNetwork n, Ord event, Ord weight, Fractional weight)
-  => n event weight
-  -> Maybe (MinimalSTN n event weight)
+  :: (SimpleTemporalNetwork net, Ord event, Ord weight, Fractional weight)
+  => net event weight
+  -- ^ The Simple Temporal Network to minimise
+  -> Maybe (MinimalSTN net event weight)
+  -- ^ Newly minimised SimpleTemporalNetwork
 minimise stn
   = if isConsistent newStn
       then Just (MinimalSTN newStn)
@@ -41,12 +51,3 @@ minimise stn
   where
     newMap = floydWarshall (events stn) (\(x, y) -> cnst x y stn)
     newStn = fromMap (zEvent stn) newMap
-
-
---iterativeMinimise
---  :: (SimpleTemporalNetwork n, Ord event, Ord weight)
---  => NewConstraint event weight
---  -> MinimalSTN (n event weight)
---  -> MinimalSTN (n event weight)
-
-

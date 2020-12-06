@@ -16,18 +16,23 @@ import HaskellTemporalLib.Internal.Graph (ifpc)
 
 -- | Assign an event in an STN.
 assignEvent
-  :: (ModifiableNet n, Ord a, Fractional d)
-  => a
-  -> d
-  -> n a d
-  -> n a d
+  :: (ModifiableNet n, Ord event, Fractional t)
+  => event      -- ^ Event to assign in n.
+  -> t          -- ^ Time to assign it, relative to the Z event.
+  -> n event t  -- ^ ModifiableNet to assign the event in.
+  -> n event t  -- ^ New modifiable net with the assigned event.
 assignEvent e val stn = setBcnst (zEvent stn) e val val stn
 
-
+-- | Return a schedule (i.e. all events have been assigned), such that
+-- the event which must occur last temporally is forced to occur as early as
+-- possible.
+--
+-- The times of events besides the last event are chosen arbitrarily
+-- while meeting this constraint.
 smallestMakespanSchedule
-  :: (ModifiableNet n, Ord a, Ord d, Fractional d)
-  => n a d
-  -> Maybe (n a d)
+  :: (ModifiableNet n, Ord event, Ord t, Fractional t)
+  => n event t
+  -> Maybe (n event t)
 smallestMakespanSchedule n = go $ smsFirstIter n
  where
   go
@@ -51,9 +56,9 @@ smallestMakespanSchedule n = go $ smsFirstIter n
 
 
 smsFirstIter
-  :: (ModifiableNet n, Ord a, Ord d, Fractional d)
-  => n a d
-  -> Maybe (n a d)
+  :: (ModifiableNet n, Ord event, Ord t, Fractional t)
+  => n event t
+  -> Maybe (n event t)
 smsFirstIter m =
   let miniM = minimise m
       mkspanM x = fmap negate (fst $ snd $ earliestMakespan x)
