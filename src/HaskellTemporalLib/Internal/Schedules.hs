@@ -1,13 +1,17 @@
 {-# LANGUAGE TupleSections #-}
 
-module HaskellTemporalLib.Internal.Schedules (assignEvent, smallestMakespanSchedule) where
+module HaskellTemporalLib.Internal.Schedules
+  ( assignEvent
+  , smallestMakespanSchedule
+  )
+where
 
 import HaskellTemporalLib.Internal.Stn
   ( SimpleTemporalNetwork(..)
   , ModifiableNet(..)
   )
-import HaskellTemporalLib.MinimalSTN (minimiseNetwork, generalise)
-import HaskellTemporalLib.Graph (ifpc)
+import HaskellTemporalLib.Internal.MinimalSTN (minimise, generalise)
+import HaskellTemporalLib.Internal.Graph (ifpc)
 
 
 -- | Assign an event in an STN.
@@ -39,7 +43,7 @@ smallestMakespanSchedule n = go $ smsFirstIter n
     where
       nextUnassigned         = head $ unassignedEvents stn
       nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
-      newConstraintM = ((nextUnassigned, zEvent stn),) <$> nextUnassignedMinBound
+      newConstraintM = ((zEvent stn, nextUnassigned),) <$> nextUnassignedMinBound
       -- The lines below here can be replaced with any suitable
       -- partial minimasation.
       newWeights = newConstraintM >>= \x -> ifpc x (events stn) (toMap stn)
@@ -51,7 +55,7 @@ smsFirstIter
   => n a d
   -> Maybe (n a d)
 smsFirstIter m =
-  let miniM = minimiseNetwork m
+  let miniM = minimise m
       mkspanM x = fmap negate (fst $ snd $ earliestMakespan x)
       newConstraintM = miniM >>= mkspanM
       finalEvent x = fst $ earliestMakespan x
