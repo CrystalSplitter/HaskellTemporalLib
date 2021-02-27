@@ -3,3 +3,8 @@ tmp/
 
 # hlint generated report
 report.html
+
+# Temporary files
+*~
+*.swp
+*.swo
