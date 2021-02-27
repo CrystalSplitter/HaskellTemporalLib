@@ -21,10 +21,11 @@ extra-source-files:
 library
   exposed-modules:
     HaskellTemporalLib.Tools
+    HaskellTemporalLib.Internal.Graph
+    HaskellTemporalLib.Internal.VectorGraph
   -- other-extensions:
   other-modules:
-    HaskellTemporalLib.Internal.Graph
-    , HaskellTemporalLib.Internal.MinimalSTN
+    HaskellTemporalLib.Internal.MinimalSTN
     , HaskellTemporalLib.Internal.STNMap
     , HaskellTemporalLib.Internal.Stn
     , HaskellTemporalLib.Internal.Schedules
@@ -39,6 +40,7 @@ library
     , HUnit
     , test-framework
     , test-framework-hunit
+    , vector
   hs-source-dirs:
     src
   default-language:
