@@ -41,14 +41,16 @@ cabal v2-haddock
 ```
 
 ## Uninstalling From Cabal
-Usually the package files will be located in `$HOME/.cabal/store/ghc-8.8.4/`,
+Usually the package files will be located in `$HOME/.cabal/store/ghc-X.X.X/`,
 unless you have a custom install set up for `cabal`.
 
 You may need to clear your default loaded packages as well in
-`$HOME/.ghc/x86_64-linux-8.8.4/environments/default`.
+`$HOME/.ghc/x86_64-linux-X.X.X/environments/default`.
+
+Replace the `X.X.X` with the your appropriate GHC version.
 
 ## Running Tests
 ```bash
 # In $BUILD_LOC
-cabal test
+cabal v2-test
 ```
