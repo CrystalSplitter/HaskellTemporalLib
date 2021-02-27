@@ -8,24 +8,23 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as Set
 import qualified Data.Map.Strict as M'
 
+
 type NewConstraint v e = ((v, v), e)
 
-{-|
-  Incremental Full Path Consistency.
 
-  Takes in a new constraint, a Foldable of vertices, and an
-  all-pairs-shortest-path distance Map.
-
-  Returns a newly minimised distance map if the new graph can be minimised.
-
-  Léon Planken. "Incrementally Solving the STP by Enforcing Partial Path
-  Consistency". PlanSIG 2008.
--}
+-- | Incremental Full Path Consistency.
+-- Takes in a new constraint, a Foldable of vertices, and an
+-- all-pairs-shortest-path distance Map.
+--
+-- Returns a newly minimised distance map if the new graph can be minimised.
+--
+-- [Léon Planken. "Incrementally Solving the STP by Enforcing Partial Path
+-- Consistency". PlanSIG 2008.](http://www.macs.hw.ac.uk/~ruth/plansig08/ukplansig09_submission_6.pdf)
 ifpc :: (Foldable f, Ord v, Ord w, Num w)
   => NewConstraint v w        -- ^ The new constraint to add.
-  -> f v                      -- ^ A foldable holding graph vertices.
-  -> M'.Map (v, v) w          -- ^ A APSP distance map between any two vertices.
-  -> Maybe (M'.Map (v, v) w)  -- ^ A Maybe of a new APSP distance map.
+  -> f v                      -- ^ A foldable holding graph nodes.
+  -> M'.Map (v, v) w          -- ^ A APSP distance map between any two nodes.
+  -> Maybe (M'.Map (v, v) w)  -- ^ A @Maybe@ of a new APSP distance map.
 ifpc (edge_ab, w'_ab) vs wm
   | w'_ab + w_ab < 0 = Nothing
   | w'_ab >= w_ab = return wm
@@ -43,10 +42,11 @@ ifpc (edge_ab, w'_ab) vs wm
         loop2Result = ifpcLoop2 edge_ab loop1Result
 
 
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- Helper functions and types for ifpc.
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 
+-- | The current state of the IFPC Algorithm at any point in the loops.
 data IFPCContext vert dist vertContainer = IFPCContext
   { weights :: M'.Map (vert, vert) dist
   , verts :: vertContainer
@@ -123,24 +123,21 @@ ifpcLoop2Inner a (i, j) context
             else weights context
       update x = x { weights = newWeights }
 
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 -- Floyd Warshall Function
--- -----------------------------------------------------------------------------
+-- ---------------------------------------------------------------------------
 
 inf :: (Fractional a) => a
 inf = 1.0 / 0.0
 
-{-|
-   Generate an all-pairs shortest-path mapping between any two nodes.
-
-   `e` is the list of nodes to schedule.
-   `w` is a function which returns the weights between any two events.
-   >>> floydwarshall eventList weightFunction
--}
+-- |  Generate an all-pairs shortest-path mapping between any two nodes.
+--
+-- >>> floydwarshall eventList weightFunction
 floydWarshall
   :: (Ord node, Ord dist, Fractional dist)
-  => [node]
+  => [node] -- ^ List of nodes to find APSP of.
   -> ((node, node) -> Maybe dist)
+  -- ^ A function which gets the existing weight between any two nodes.
   -> M'.Map (node, node) dist
 floydWarshall e = floydWarshallRec eventGroups
  where
