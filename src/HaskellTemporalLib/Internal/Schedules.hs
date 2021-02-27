@@ -11,7 +11,7 @@ import HaskellTemporalLib.Internal.Stn
   , ModifiableNet(..)
   )
 import HaskellTemporalLib.Internal.MinimalSTN (minimise, generalise)
-import HaskellTemporalLib.Internal.Graph (ifpc)
+import HaskellTemporalLib.Internal.Graph.Graph (ifpc)
 
 
 -- | Assign an event in an STN.

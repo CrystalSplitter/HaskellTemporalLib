@@ -17,12 +17,12 @@ import           Data.Map.Strict                ( Map
                                                 )
 import           Data.Maybe
 
-import           HaskellTemporalLib.Internal.Graph
+import           HaskellTemporalLib.Internal.Graph.Graph
                                                as G
                                                 ( floydWarshall
                                                 , ifpc
                                                 )
-import           HaskellTemporalLib.Internal.VectorGraph
+import           HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
                                                as VG
                                                 ( floydWarshall )
 

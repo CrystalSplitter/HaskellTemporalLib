@@ -21,8 +21,8 @@ extra-source-files:
 library
   exposed-modules:
     HaskellTemporalLib.Tools
-    HaskellTemporalLib.Internal.Graph
-    HaskellTemporalLib.Internal.VectorGraph
+    HaskellTemporalLib.Internal.Graph.Graph
+    HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
   -- other-extensions:
   other-modules:
     HaskellTemporalLib.Internal.MinimalSTN

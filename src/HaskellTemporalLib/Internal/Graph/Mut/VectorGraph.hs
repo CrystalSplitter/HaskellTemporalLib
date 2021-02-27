@@ -1,4 +1,4 @@
-module HaskellTemporalLib.Internal.VectorGraph
+module HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
   ( floydWarshall
   ) where
 
@@ -9,6 +9,16 @@ import qualified Data.Vector                   as V
 import qualified Data.Vector.Mutable           as VM
 import           System.IO.Unsafe
 
+------------------------------------------------------------------------------
+-- Helper types.
+------------------------------------------------------------------------------
+
+
+-- | Defines a lookup table to lookup and insert weights.
+class WeightLookupTable tab where
+  lookupWeight :: (Ord key) => key -> tab key val -> val
+  insertWeight :: (Ord key) => key -> val -> tab key val -> IO (tab key val)
+
 
 data Matrix v = Matrix
   { width  :: Int
@@ -16,6 +26,12 @@ data Matrix v = Matrix
   , dat    :: v
   }
   deriving Show
+
+type NewConstraint v e = ((v, v), e)
+
+------------------------------------------------------------------------------
+-- Utilities
+------------------------------------------------------------------------------
 
 at :: Matrix (V.Vector a) -> (Int, Int) -> a
 at m (r, c) = dat m V.! (r * width m + c)
@@ -32,6 +48,7 @@ matrixToList m =
   | c <- [0 .. width m - 1]
   , r <- [0 .. height m - 1]
   ]
+
 
 idxToNodeMap :: [a] -> M'.Map Int a
 idxToNodeMap xs = M'.fromList (zip [0 ..] xs)
@@ -67,9 +84,9 @@ inf = 1.0 / 0.0
 -- Complexity is \( O(n^3) \).
 floydWarshall
   :: (Ord node, Ord dist, Fractional dist)
-  => [node]
-  -> ((node, node) -> Maybe dist)
-  -> M'.Map (node, node) dist
+  => [node] -- ^ List of nodes.
+  -> ((node, node) -> Maybe dist) -- ^ Distance mapping function.
+  -> M'.Map (node, node) dist -- ^ Returned APSP between nodes
 floydWarshall es wf = unsafePerformIO $ floydWarshallIO es wf
 
 -- | IO implementation of floydWarshall
@@ -100,6 +117,22 @@ floydWarshallIO es wf =
                                , dat    = frozenVec
                                }
         return (M'.fromList (intListToNodes (matrixToList frozenMat) nodeMap))
+
+-- | Incremental Full Path Consistency.
+-- Takes in a new constraint, a Foldable of vertices, and an
+-- all-pairs-shortest-path distance Map.
+--
+-- Returns a newly minimised distance map if the new graph can be minimised.
+--
+-- [Léon Planken. "Incrementally Solving the STP by Enforcing Partial Path
+-- Consistency". PlanSIG 2008.](http://www.macs.hw.ac.uk/~ruth/plansig08/ukplansig09_submission_6.pdf)
+ifpc
+  :: (Foldable f, Ord v, Ord w, Num w, WeightLookupTable tab)
+  => NewConstraint v w        -- ^ The new constraint to add.
+  -> f v                      -- ^ A foldable holding graph nodes.
+  -> tab (v, v) w             -- ^ A APSP distance map between any two nodes.
+  -> Maybe (tab (v, v) w)     -- ^ A @Maybe@ of a new APSP distance map.
+ifpc (edge_ab, w'_ab) vs wm = undefined
 
 -- | Update a distance in the matrix.
 updateDist

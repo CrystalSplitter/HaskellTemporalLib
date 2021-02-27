@@ -16,11 +16,11 @@ import           Test.HUnit                    as HUnit
                                                 , Test(..)
                                                 )
 
-import qualified HaskellTemporalLib.Internal.Graph
+import           HaskellTemporalLib.Internal.Graph.Graph
                                                as G
                                                 ( floydWarshall )
 
-import qualified HaskellTemporalLib.Internal.VectorGraph
+import           HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
                                                as VG
                                                 ( floydWarshall )
 tests :: [Framework.Test]

@@ -1,7 +1,8 @@
-module HaskellTemporalLib.Internal.Graph
+module HaskellTemporalLib.Internal.Graph.Graph
 ( ifpc
 , floydWarshall
 , NewConstraint
+, WeightLookupTable(..)
 ) where
 
 import Data.Maybe (fromMaybe)
@@ -9,8 +10,17 @@ import qualified Data.Set as Set
 import qualified Data.Map.Strict as M'
 
 
-type NewConstraint v e = ((v, v), e)
+-- | Defines a lookup table to lookup and insert weights.
+class WeightLookupTable tab where
+  lookupWeight :: (Ord key) => key -> tab key val -> val
+  insertWeight :: (Ord key) => key -> val -> tab key val -> tab key val
 
+
+instance WeightLookupTable M'.Map where
+  lookupWeight key m = m M'.! key
+  insertWeight key val m = M'.insert key val m
+
+type NewConstraint v e = ((v, v), e)
 
 -- | Incremental Full Path Consistency.
 -- Takes in a new constraint, a Foldable of vertices, and an
@@ -20,18 +30,18 @@ type NewConstraint v e = ((v, v), e)
 --
 -- [Léon Planken. "Incrementally Solving the STP by Enforcing Partial Path
 -- Consistency". PlanSIG 2008.](http://www.macs.hw.ac.uk/~ruth/plansig08/ukplansig09_submission_6.pdf)
-ifpc :: (Foldable f, Ord v, Ord w, Num w)
+ifpc :: (Foldable f, Ord v, Ord w, Num w, WeightLookupTable tab)
   => NewConstraint v w        -- ^ The new constraint to add.
   -> f v                      -- ^ A foldable holding graph nodes.
-  -> M'.Map (v, v) w          -- ^ A APSP distance map between any two nodes.
-  -> Maybe (M'.Map (v, v) w)  -- ^ A @Maybe@ of a new APSP distance map.
+  -> tab (v, v) w          -- ^ A APSP distance map between any two nodes.
+  -> Maybe (tab (v, v) w)  -- ^ A @Maybe@ of a new APSP distance map.
 ifpc (edge_ab, w'_ab) vs wm
   | w'_ab + w_ab < 0 = Nothing
   | w'_ab >= w_ab = return wm
   | otherwise = return $ weights loop2Result
-  where w_ab = wm M'.! edge_ab
+  where w_ab = lookupWeight edge_ab wm
         context = IFPCContext
-          { weights = M'.insert edge_ab w'_ab wm
+          { weights = insertWeight edge_ab w'_ab wm
           , verts = vs
           , checkSetJ = Set.empty
           , checkSetI = Set.empty
@@ -47,24 +57,28 @@ ifpc (edge_ab, w'_ab) vs wm
 -- ---------------------------------------------------------------------------
 
 -- | The current state of the IFPC Algorithm at any point in the loops.
-data IFPCContext vert dist vertContainer = IFPCContext
-  { weights :: M'.Map (vert, vert) dist
+data IFPCContext tab vert dist vertContainer = IFPCContext
+  { weights :: tab (vert, vert) dist
   , verts :: vertContainer
   , checkSetJ :: Set.Set vert
   , checkSetI :: Set.Set vert
-  } deriving (Show)
+  }
 
 
-ifpcLoop1 :: (Foldable f, Ord v, Ord w, Num w) =>
-  (v, v) -> f v -> IFPCContext v w (f v) ->  IFPCContext v w (f v)
+ifpcLoop1
+  :: (Foldable f, Ord v, Ord w, Num w, WeightLookupTable tab)
+  => (v, v)
+  -> f v
+  -> IFPCContext tab v w (f v)
+  -> IFPCContext tab v w (f v)
 ifpcLoop1 edge@(a, b) vs context
   | null vs = context
   | otherwise = foldr (ifpcLoop1Inner edge) context filteredVerts
   where filteredVerts = filter (\v -> (v /= a) && (v /= b)) $ foldr (:) [] vs
 
 
-ifpcLoop1Inner :: (Ord v, Ord w, Num w) =>
-   (v, v) -> v -> IFPCContext v w (f v) -> IFPCContext v w (f v)
+ifpcLoop1Inner :: (Ord v, Ord w, Num w, WeightLookupTable tab) =>
+   (v, v) -> v -> IFPCContext tab v w (f v) -> IFPCContext tab v w (f v)
 ifpcLoop1Inner (a, b) k context =
       IFPCContext
         { weights = nW
@@ -74,10 +88,10 @@ ifpcLoop1Inner (a, b) k context =
         }
     where
           -- Helper functions
-          weightOf e = weights context M'.! e
+          weightOf e = lookupWeight e (weights context)
           weightUpdate cond edge val w =
             if cond
-              then M'.insert edge val w
+              then insertWeight edge val w
               else w
 
           -- Aliases
@@ -99,8 +113,8 @@ ifpcLoop1Inner (a, b) k context =
               else checkSetJ context
 
 
-ifpcLoop2 :: (Ord v, Ord w, Num w) =>
-  (v, v) -> IFPCContext v w (f v) -> IFPCContext v w (f v)
+ifpcLoop2 :: (Ord v, Ord w, Num w, WeightLookupTable tab) =>
+  (v, v) -> IFPCContext tab v w (f v) -> IFPCContext tab v w (f v)
 ifpcLoop2 (a, _) context =
   foldr (ifpcLoop2Inner a) context ijGroup
   where ijGroup = [ (i, j)
@@ -110,16 +124,16 @@ ifpcLoop2 (a, _) context =
                   ]
 
 
-ifpcLoop2Inner :: (Ord v, Ord w, Num w) =>
-  v -> (v, v) -> IFPCContext v w (f v) -> IFPCContext v w (f v)
+ifpcLoop2Inner :: (Ord v, Ord w, Num w, WeightLookupTable tab) =>
+  v -> (v, v) -> IFPCContext tab v w (f v) -> IFPCContext tab v w (f v)
 ifpcLoop2Inner a (i, j) context
   = update context
     where
-      weightOf edge = weights context M'.! edge
+      weightOf edge = lookupWeight edge (weights context)
       w_iaj = weightOf (i, a) + weightOf (a, j)
       newWeights
         = if weightOf (i, j) > w_iaj
-            then M'.insert (i, j) w_iaj (weights context)
+            then insertWeight (i, j) w_iaj (weights context)
             else weights context
       update x = x { weights = newWeights }
 
