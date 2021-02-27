@@ -6,7 +6,7 @@ where
 
 
 import HaskellTemporalLib.Internal.Stn (SimpleTemporalNetwork(..))
-import HaskellTemporalLib.Internal.Graph (floydWarshall)
+import HaskellTemporalLib.Internal.VectorGraph (floydWarshall)
 
 -- | Wrapper type to indicate minimality at compile time.
 -- With a minimal STN, you can conduct iterative minimisations on the
