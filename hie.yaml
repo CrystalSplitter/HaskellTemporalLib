@@ -1,4 +1,6 @@
 cradle:
   cabal:
-    - path: "./"
+    - path: "./src/"
       component: "lib:HaskellTemporalLib"
+    - path: "./test/"
+      component: "HaskellTemporalLib:HTLSuite"

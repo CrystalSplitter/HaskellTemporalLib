@@ -37,9 +37,6 @@ library
     base >= 4.12.0.0
     , containers
     , mtl
-    , HUnit
-    , test-framework
-    , test-framework-hunit
     , vector
   hs-source-dirs:
     src
@@ -63,6 +60,7 @@ test-suite HTLSuite
   other-modules:
     QCGraph
     QCStn
+    Fuzzing.FloydWarshall
   
   -- Required 'test-framework' as per Risto-Stevcev's gist:
   -- https://gist.github.com/Risto-Stevcev/a9798abc898fba99235b
@@ -73,6 +71,7 @@ test-suite HTLSuite
     , test-framework-hunit
     , containers
     , HaskellTemporalLib
+    , random
   default-language:
     Haskell2010
   ghc-options:
@@ -81,3 +80,5 @@ test-suite HTLSuite
     -Wincomplete-record-updates
     -Wincomplete-uni-patterns
     -Widentities
+    -fprof-auto
+    -- "-with-rtsopts=-N -p -s -h -i0.1"
