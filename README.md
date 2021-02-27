@@ -26,11 +26,18 @@ git clone 'https://github.com/CrystalSplitter/HaskellTemporalLib.git' "$BUILD_LO
 cd "$BUILD_LOC"
 
 # In $BUILD_LOC
-cabal update
-cabal build
-cabal install --lib
+cabal v2-update
+cabal v2-build
+cabal v2-install --lib
 
 # You can now delete the $BUILD_LOC if you so desire.
+```
+
+## Generating Haddock
+
+```bash
+# In $BUILD_LOC
+cabal v2-haddock
 ```
 
 ## Uninstalling From Cabal
