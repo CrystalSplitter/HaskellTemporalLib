@@ -1,5 +1,7 @@
 # HaskellTemporalLib
-Utilities for Working with Temporal Networks
+*Utilities for working with Temporal Networks.*
+
+---
 
 This library provides types and functions to solve Temporal Problems using
 Temporal Networks.
@@ -8,7 +10,14 @@ Temporal Networks are a way to represent time constraints between events, and
 are useful in solving autonomous planning problems with continuous time.
 
 ## Installing From GitHub Source / Local Package Cabal Install
-Using Cabal:
+
+### External Dependencies:
+  * gcc
+  * ghc (easily installed with ghcup)
+  * cabal (easily installed with ghcup)
+  * [libgmp-dev](https://packages.debian.org/buster/libgmp-dev)
+
+### Installation:
 
 ```bash
 git clone 'https://github.com/CrystalSplitter/HaskellTemporalLib.git' "$BUILD_LOC"
