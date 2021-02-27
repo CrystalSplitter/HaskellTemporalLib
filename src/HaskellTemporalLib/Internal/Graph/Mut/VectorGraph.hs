@@ -1,8 +1,12 @@
 module HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
   ( floydWarshall
+  , ifpc
   ) where
 
-import           Control.Monad                  ( liftM2 )
+import           Control.Monad                  ( forM_
+                                                , liftM2
+                                                , when
+                                                )
 import qualified Data.Map.Strict               as M'
 import           Data.Maybe                     ( fromMaybe )
 import qualified Data.Vector                   as V
@@ -12,12 +16,6 @@ import           System.IO.Unsafe
 ------------------------------------------------------------------------------
 -- Helper types.
 ------------------------------------------------------------------------------
-
-
--- | Defines a lookup table to lookup and insert weights.
-class WeightLookupTable tab where
-  lookupWeight :: (Ord key) => key -> tab key val -> val
-  insertWeight :: (Ord key) => key -> val -> tab key val -> IO (tab key val)
 
 
 data Matrix v = Matrix
@@ -39,6 +37,9 @@ at m (r, c) = dat m V.! (r * width m + c)
 atIO :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
 atIO m (r, c) = dat m `VM.read` (r * width m + c)
 
+(!@) :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
+m !@ e = atIO m e
+
 writeAt :: Matrix (VM.IOVector a) -> (Int, Int) -> a -> IO ()
 writeAt m (r, c) = VM.write (dat m) (r * width m + c)
 
@@ -48,7 +49,6 @@ matrixToList m =
   | c <- [0 .. width m - 1]
   , r <- [0 .. height m - 1]
   ]
-
 
 idxToNodeMap :: [a] -> M'.Map Int a
 idxToNodeMap xs = M'.fromList (zip [0 ..] xs)
@@ -109,7 +109,8 @@ floydWarshallIO es wf =
          -- Fill with the default weights provided by wf
         mapM_ (writeWeight mat wf) doubleZippedEvents
         -- Update every cell in the matrix to find APSP
-        updateDist mat [ (i, j, k) | k <- nIdx, i <- nIdx, j <- nIdx ]
+        floydWarshallUpdate mat
+                            [ (i, j, k) | k <- nIdx, i <- nIdx, j <- nIdx ]
         -- Freeze the vector and pack it back in.
         frozenVec <- V.freeze $ dat mat
         let frozenMat = Matrix { width  = numNodes
@@ -117,6 +118,42 @@ floydWarshallIO es wf =
                                , dat    = frozenVec
                                }
         return (M'.fromList (intListToNodes (matrixToList frozenMat) nodeMap))
+
+-- | Update a distance in the matrix.
+floydWarshallUpdate
+  :: (Ord a, Num a) => Matrix (VM.IOVector a) -> [(Int, Int, Int)] -> IO ()
+floydWarshallUpdate _ []               = return ()
+floydWarshallUpdate m ((i, j, k) : xs) = do
+  ij <- m !@ (i, j)
+  ik <- m !@ (i, k)
+  kj <- m !@ (k, j)
+  writeAt m (i, j) $ min ij (ik + kj)
+  floydWarshallUpdate m xs
+
+------------------------------------------------------------------------------
+-- IFPC Functions
+------------------------------------------------------------------------------
+
+newCheckSet :: Int -> IO (VM.IOVector Bool)
+newCheckSet numNodes = VM.new numNodes >>= fillCheckSet
+
+fillCheckSet :: VM.IOVector Bool -> IO (VM.IOVector Bool)
+fillCheckSet v = do
+  forM_ [0 .. VM.length v - 1] $ \idx -> do
+    VM.write v idx False
+  return v
+
+rangeOverCheckSet :: V.Vector Bool -> [Int]
+rangeOverCheckSet v =
+  foldr (\(idx, x) acc -> if x then idx : acc else acc) []
+    $ zip [0 .. V.length v - 1] (V.toList v)
+
+data IFPCContext = IFPCContext
+  { srcNode :: Int
+  , tarNode :: Int
+  , setI    :: VM.IOVector Bool
+  , setJ    :: VM.IOVector Bool
+  }
 
 -- | Incremental Full Path Consistency.
 -- Takes in a new constraint, a Foldable of vertices, and an
@@ -127,20 +164,86 @@ floydWarshallIO es wf =
 -- [Léon Planken. "Incrementally Solving the STP by Enforcing Partial Path
 -- Consistency". PlanSIG 2008.](http://www.macs.hw.ac.uk/~ruth/plansig08/ukplansig09_submission_6.pdf)
 ifpc
-  :: (Foldable f, Ord v, Ord w, Num w, WeightLookupTable tab)
-  => NewConstraint v w        -- ^ The new constraint to add.
-  -> f v                      -- ^ A foldable holding graph nodes.
-  -> tab (v, v) w             -- ^ A APSP distance map between any two nodes.
-  -> Maybe (tab (v, v) w)     -- ^ A @Maybe@ of a new APSP distance map.
-ifpc (edge_ab, w'_ab) vs wm = undefined
+  :: (Ord w, Num w)
+  => NewConstraint Int w
+  -- ^ The new constraint to add.
+  -> Matrix (VM.IOVector w)
+  -- ^ An APSP distance map between any two nodes.
+  -> IO Bool
+  -- ^ Returns an @IO@ of @True@ if consistent, otherwise @False@.
+ifpc (toUpdate@(src, tar), newWeight) m = do
+  w_ba <- m !@ (tar, src)
+  w_ab <- m !@ (src, tar)
+  if newWeight < negate w_ba
+    -- We've just created an inconsistent network. Just return failure.
+    then return False
+    else if newWeight >= w_ab
+      -- Our network is still the same, we don't need to update anything.
+      then return True
+      -- We have to propagate everything. This takes a while.
+      else apspIO >> return True
+ where
+  nodeRange = [0 .. width m - 1]
+  apspIO    = do
+    -- Update the new weight in m
+    writeAt m toUpdate newWeight
+    -- Build the check sets
+    checkSetI <- newCheckSet $ max (width m) (height m)
+    checkSetJ <- newCheckSet $ max (width m) (height m)
+    -- This updates m for any edges modified by the new constraint.
+    let context = IFPCContext { srcNode = src
+                              , tarNode = tar
+                              , setI    = checkSetI
+                              , setJ    = checkSetJ
+                              }
+    ifcpLoop1 m [ n | n <- nodeRange, n /= src, n /= tar ] context
+    -- We won't modify these anymore, so we can freeze them.
+    frozenSetI <- V.freeze checkSetI
+    frozenSetJ <- V.freeze checkSetJ
+    -- This updates m with any remaining things in the check set.
+    ifcpLoop2
+      m
+      [ (i, j)
+      | i <- rangeOverCheckSet frozenSetI
+      , j <- rangeOverCheckSet frozenSetJ
+      , i /= j
+      ]
+      src
 
--- | Update a distance in the matrix.
-updateDist
-  :: (Ord a, Num a) => Matrix (VM.IOVector a) -> [(Int, Int, Int)] -> IO ()
-updateDist _ []               = return ()
-updateDist m ((i, j, k) : xs) = do
-  ij <- m `atIO` (i, j)
-  ik <- m `atIO` (i, k)
-  kj <- m `atIO` (k, j)
-  writeAt m (i, j) $ min ij (ik + kj)
-  updateDist m xs
+  -- Update the weights, and build the check sets.
+ifcpLoop1
+  :: (Ord w, Num w) => Matrix (VM.IOVector w) -> [Int] -> IFPCContext -> IO ()
+ifcpLoop1 _ []       _       = return ()
+ifcpLoop1 m (k : ks) context = do
+  let a         = srcNode context
+      b         = tarNode context
+      checkSetI = setI context
+      checkSetJ = setJ context
+  -- Get all the weights at the start.
+  newWeight <- m !@ (a, b)
+  w_ak      <- m !@ (a, k)
+  w_ka      <- m !@ (k, a)
+  w_bk      <- m !@ (b, k)
+  w_kb      <- m !@ (k, b)
+  -- Update any weghts, and update the check sets accordingly.
+  when (w_kb > w_ka + newWeight) $ do
+    writeAt m (k, b) (w_ka + newWeight)
+    VM.write checkSetI k True
+  when (w_ak > newWeight + w_bk) $ do
+    writeAt m (a, k) (newWeight + w_bk)
+    VM.write checkSetJ k True
+  ifcpLoop1 m ks context
+
+
+-- Update any weights from the checksets.
+ifcpLoop2
+  :: (Ord w, Num w) => Matrix (VM.IOVector w) -> [(Int, Int)] -> Int -> IO ()
+ifcpLoop2 _ []                   _   = return ()
+ifcpLoop2 m ((i, j) : remaining) src = do
+  w_ia <- m !@ (i, src)
+  w_aj <- m !@ (src, j)
+  w_ij <- m !@ (i, j)
+  when (w_ij > w_ia + w_aj) $ do
+    writeAt m (i, j) (w_ia + w_aj)
+  ifcpLoop2 m remaining src
+
