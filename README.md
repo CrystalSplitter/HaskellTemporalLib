@@ -1,6 +1,8 @@
 # HaskellTemporalLib
 *Utilities for working with Temporal Networks.*
 
+[![License LGPLv3](https://img.shields.io/github/license/CrystalSplitter/HaskellTemporalLib?style=for-the-badge)](https://opensource.org/licenses/LGPL-3.0)
+
 ---
 
 This library provides types and functions to solve Temporal Problems using
