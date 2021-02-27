@@ -5,20 +5,17 @@
 module HaskellTemporalLib.Tools
 (
 -- * High level STN typeclass
-module HaskellTemporalLib.Internal.Stn
+module HaskellTemporalLib.Internal.Stn,
 -- * Minimising STNs
-, module HaskellTemporalLib.Internal.MinimalSTN
+module HaskellTemporalLib.Internal.MinimalSTN,
 -- * STNs as Maps
-, module HaskellTemporalLib.Internal.STNMap
--- * Graph Algorithms
-, module HaskellTemporalLib.Internal.Graph
+module HaskellTemporalLib.Internal.STNMap,
 -- * Scheduling
-, module HaskellTemporalLib.Internal.Schedules
+module HaskellTemporalLib.Internal.Schedules
 )
 where
 
 import HaskellTemporalLib.Internal.Stn
 import HaskellTemporalLib.Internal.MinimalSTN
 import HaskellTemporalLib.Internal.STNMap
-import HaskellTemporalLib.Internal.Graph
 import HaskellTemporalLib.Internal.Schedules
