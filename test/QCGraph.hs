@@ -20,11 +20,10 @@ import           Data.Maybe
 import           HaskellTemporalLib.Internal.Graph.Graph
                                                as G
                                                 ( floydWarshall
-                                                , ifpc
                                                 )
 import           HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
                                                as VG
-                                                ( floydWarshall )
+                                                ( floydWarshall, ifpc )
 
 -- Tests to export.
 
@@ -97,7 +96,7 @@ tIFPC1 = TestLabel
   "Identity"
   (TestCase
     (assertEqual "Change detected when none should exist"
-                 (fromJust (ifpc ((1, 2), 14.0) verts weightsTC1))
+                 (fromJust (VG.ifpc ((1, 2), 14.0) verts weightsTC1))
                  weightsTC1
     )
   )
@@ -108,7 +107,7 @@ tIFPC2 = TestLabel
   "Relaxed"
   (TestCase
     (assertEqual "Change detected when none should exist"
-                 (fromJust (ifpc ((1, 2), 17.0) verts weightsTC1))
+                 (fromJust (VG.ifpc ((1, 2), 17.0) verts weightsTC1))
                  weightsTC1
     )
   )
@@ -120,7 +119,7 @@ tIFPC3 = TestLabel
   (TestCase
     (assertBool
       "Change detected when some should exist"
-      (fromJust (ifpc ((1, 2), 10.0) verts weightsTC1) /= weightsTC1)
+      (fromJust (VG.ifpc ((1, 2), 10.0) verts weightsTC1) /= weightsTC1)
     )
   )
 
@@ -132,7 +131,7 @@ tIFPC4 = TestLabel
     (assertEqual
       "`ifpc` did not produce a minimal graph"
       (G.floydWarshall verts (`lookup` insert (1, 2) 10.0 weightsTC1))
-      (fromJust (ifpc ((1, 2), 10.0) verts weightsTC1))
+      (fromJust (VG.ifpc ((1, 2), 10.0) verts weightsTC1))
     )
   )
 

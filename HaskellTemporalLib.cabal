@@ -63,6 +63,7 @@ test-suite HTLSuite
     QCStn
     Fuzzing.FloydWarshall
     Fuzzing.FuzzyWeights
+    Fuzzing.FuzzyIFPC
   
   -- Required 'test-framework' as per Risto-Stevcev's gist:
   -- https://gist.github.com/Risto-Stevcev/a9798abc898fba99235b
@@ -83,4 +84,7 @@ test-suite HTLSuite
     -Wincomplete-uni-patterns
     -Widentities
     -fprof-auto
+    ---- Profiling options
+    -- -prof
+    -- -threaded
     -- "-with-rtsopts=-N -p -s -h -i0.1"
