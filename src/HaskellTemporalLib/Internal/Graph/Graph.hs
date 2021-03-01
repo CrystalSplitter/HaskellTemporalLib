@@ -35,11 +35,11 @@ ifpc :: (Foldable f, Ord v, Ord w, Num w, WeightLookupTable tab)
   -> f v                      -- ^ A foldable holding graph nodes.
   -> tab (v, v) w          -- ^ A APSP distance map between any two nodes.
   -> Maybe (tab (v, v) w)  -- ^ A @Maybe@ of a new APSP distance map.
-ifpc (edge_ab, w'_ab) vs wm
+ifpc (edge_ab@(a, b), w'_ab) vs wm
   | w'_ab + w_ab < 0 = Nothing
   | w'_ab >= w_ab = return wm
   | otherwise = return $ weights loop2Result
-  where w_ab = lookupWeight edge_ab wm
+  where w_ab = if a == b then 0 else lookupWeight edge_ab wm
         context = IFPCContext
           { weights = insertWeight edge_ab w'_ab wm
           , verts = vs
@@ -88,7 +88,9 @@ ifpcLoop1Inner (a, b) k context =
         }
     where
           -- Helper functions
-          weightOf e = lookupWeight e (weights context)
+          weightOf e@(i, j) = if i == j
+                                then 0
+                                else lookupWeight e (weights context)
           weightUpdate cond edge val w =
             if cond
               then insertWeight edge val w
@@ -129,7 +131,9 @@ ifpcLoop2Inner :: (Ord v, Ord w, Num w, WeightLookupTable tab) =>
 ifpcLoop2Inner a (i, j) context
   = update context
     where
-      weightOf edge = lookupWeight edge (weights context)
+      weightOf edge@(m, n) = if m == n
+                              then 0
+                              else lookupWeight edge (weights context)
       w_iaj = weightOf (i, a) + weightOf (a, j)
       newWeights
         = if weightOf (i, j) > w_iaj
@@ -166,8 +170,9 @@ floydWarshall e = floydWarshallRec eventGroups
     = M'.insert (i, j) distUpdated previousWeights
    where
     distUpdated = min (getDist i j) (getDist i k + getDist k j)
+    w'_ (x, y) = if x == y then Just 0.0 else w' (x, y)
     getDist x y =
-      fromMaybe (fromMaybe inf (w' (x, y))) (previousWeights M'.!? (x, y))
+      fromMaybe (fromMaybe inf (w'_ (x, y))) (previousWeights M'.!? (x, y))
     previousWeights = floydWarshallRec es w'
 
 
