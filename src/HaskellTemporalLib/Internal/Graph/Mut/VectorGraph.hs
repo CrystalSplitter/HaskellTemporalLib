@@ -1,5 +1,6 @@
 module HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
   ( floydWarshall
+  , ifpcMatrixIO
   , ifpc
   ) where
 
@@ -7,6 +8,7 @@ import           Control.Monad                  ( forM_
                                                 , liftM2
                                                 , when
                                                 )
+import qualified Data.Foldable                 as F
 import qualified Data.Map.Strict               as M'
 import           Data.Maybe                     ( fromMaybe )
 import qualified Data.Vector                   as V
@@ -31,24 +33,28 @@ type NewConstraint v e = ((v, v), e)
 -- Utilities
 ------------------------------------------------------------------------------
 
+(..<) :: (Enum a) => a -> a -> [a]
+x ..< y = [x .. pred y]
+infixr 5 ..<
+
 at :: Matrix (V.Vector a) -> (Int, Int) -> a
 at m (r, c) = dat m V.! (r * width m + c)
 
+-- | Get a value at a specified (row, column).
 atIO :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
 atIO m (r, c) = dat m `VM.read` (r * width m + c)
 
+-- | Infix alias of @atIO@
 (!@) :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
 m !@ e = atIO m e
 
 writeAt :: Matrix (VM.IOVector a) -> (Int, Int) -> a -> IO ()
 writeAt m (r, c) = VM.write (dat m) (r * width m + c)
 
+-- | Convert a matrix to a list of row-column-distance values
 matrixToList :: Matrix (V.Vector dist) -> [((Int, Int), dist)]
 matrixToList m =
-  [ ((r, c), m `at` (r, c))
-  | c <- [0 .. width m - 1]
-  , r <- [0 .. height m - 1]
-  ]
+  [ ((r, c), m `at` (r, c)) | c <- 0 ..< width m, r <- 0 ..< height m ]
 
 idxToNodeMap :: [a] -> M'.Map Int a
 idxToNodeMap xs = M'.fromList (zip [0 ..] xs)
@@ -70,8 +76,14 @@ writeWeight
   -> ((n, n) -> Maybe a)    -- ^ Weight function to map node pairs to weights.
   -> ((Int, n), (Int, n))   -- ^ Nodes and their respective matrix indices.
   -> IO ()
-writeWeight m wf ((ridx, r), (cidx, c)) =
-  writeAt m (ridx, cidx) (fromMaybe inf (wf (r, c)))
+writeWeight m wf ((ridx, r), (cidx, c)) = writeAt m (ridx, cidx) toWriteValue
+ where
+  toWriteValue = if ridx == cidx then 0.0 else fromMaybe inf (wf (r, c))
+
+-- | Convert a Vector Matrix to an edge map.
+toMap :: (Ord v) => Matrix (V.Vector a) -> (Int -> v) -> M'.Map (v, v) a
+toMap m g = M'.fromList
+  [ ((g r, g c), m `at` (r, c)) | c <- 0 ..< width m, r <- 0 ..< height m ]
 
 -- ---------------------------------------------------------------------------
 -- Floyd Warshall Function
@@ -96,25 +108,25 @@ floydWarshallIO
   -> ((node, node) -> Maybe dist)
   -> IO (M'.Map (node, node) dist)
 floydWarshallIO es wf =
-  let numNodes = length es
+  let numN = length es
       -- Range for each node index.
-      nIdx     = [0 .. numNodes - 1]
+      nIdx     = [0 .. numN - 1]
       -- Map of index to node.
       nodeMap  = idxToNodeMap es
       doubleZippedEvents =
         [ (rtup, ctup) | ctup <- zip [0 ..] es, rtup <- zip [0 ..] es ]
   in  do
-        vec <- VM.new (numNodes * numNodes)
-        let mat = Matrix { width = numNodes, height = numNodes, dat = vec }
-         -- Fill with the default weights provided by wf
-        mapM_ (writeWeight mat wf) doubleZippedEvents
+        vec <- VM.new (numN * numN)
+        let mat = Matrix { width = numN, height = numN, dat = vec }
+        -- Fill with the default weights provided by wf
+        forM_ doubleZippedEvents (writeWeight mat wf)
         -- Update every cell in the matrix to find APSP
         floydWarshallUpdate mat
                             [ (i, j, k) | k <- nIdx, i <- nIdx, j <- nIdx ]
         -- Freeze the vector and pack it back in.
         frozenVec <- V.freeze $ dat mat
-        let frozenMat = Matrix { width  = numNodes
-                               , height = numNodes
+        let frozenMat = Matrix { width  = numN
+                               , height = numN
                                , dat    = frozenVec
                                }
         return (M'.fromList (intListToNodes (matrixToList frozenMat) nodeMap))
@@ -122,7 +134,7 @@ floydWarshallIO es wf =
 -- | Update a distance in the matrix.
 floydWarshallUpdate
   :: (Ord a, Num a) => Matrix (VM.IOVector a) -> [(Int, Int, Int)] -> IO ()
-floydWarshallUpdate _ []               = return ()
+floydWarshallUpdate _ []               = pure ()
 floydWarshallUpdate m ((i, j, k) : xs) = do
   ij <- m !@ (i, j)
   ik <- m !@ (i, k)
@@ -139,14 +151,14 @@ newCheckSet numNodes = VM.new numNodes >>= fillCheckSet
 
 fillCheckSet :: VM.IOVector Bool -> IO (VM.IOVector Bool)
 fillCheckSet v = do
-  forM_ [0 .. VM.length v - 1] $ \idx -> do
+  forM_ (0 ..< VM.length v) $ \idx -> do
     VM.write v idx False
-  return v
+  pure v
 
 rangeOverCheckSet :: V.Vector Bool -> [Int]
 rangeOverCheckSet v =
   foldr (\(idx, x) acc -> if x then idx : acc else acc) []
-    $ zip [0 .. V.length v - 1] (V.toList v)
+    $ zip (0 ..< V.length v) (V.toList v)
 
 data IFPCContext = IFPCContext
   { srcNode :: Int
@@ -154,6 +166,35 @@ data IFPCContext = IFPCContext
   , setI    :: VM.IOVector Bool
   , setJ    :: VM.IOVector Bool
   }
+
+ifpc
+  :: (Ord v, Ord w, Fractional w, Foldable f)
+  => NewConstraint v w
+  -> f v
+  -> M'.Map (v, v) w
+  -> Maybe (M'.Map (v, v) w)
+ifpc ((src, tar), w_prime) verts wf =
+  let
+    vertToIndex v = M'.fromList (zip (F.toList verts) [0 ..]) M'.! v
+    idxToVert i = V.fromList (F.toList verts) V.! i
+    numVerts                     = length verts
+    -- Create a matrix, freeze it, then convert to a map.
+    (isConsistent, newWeightMat) = unsafePerformIO $ do
+      vec <- VM.new (numVerts * numVerts)
+      let m                = Matrix numVerts numVerts vec
+          idxNewConstraint = ((vertToIndex src, vertToIndex tar), w_prime)
+      -- Fill the matrix with the weight function.
+      forM_ [ (a, b) | a <- 0 ..< numVerts, b <- 0 ..< numVerts ]
+        $ \(r, c) -> do
+            let toWriteValue = if r == c
+                  then 0.0
+                  else fromMaybe inf $ wf M'.!? (idxToVert r, idxToVert c)
+            writeAt m (r, c) toWriteValue
+      isConsistent_ <- ifpcMatrixIO idxNewConstraint m
+      frozenVec     <- V.freeze $ dat m
+      pure (isConsistent_, Matrix numVerts numVerts frozenVec)
+  in
+    if isConsistent then Just (toMap newWeightMat idxToVert) else Nothing
 
 -- | Incremental Full Path Consistency.
 -- Takes in a new constraint, a Foldable of vertices, and an
@@ -163,7 +204,7 @@ data IFPCContext = IFPCContext
 --
 -- [Léon Planken. "Incrementally Solving the STP by Enforcing Partial Path
 -- Consistency". PlanSIG 2008.](http://www.macs.hw.ac.uk/~ruth/plansig08/ukplansig09_submission_6.pdf)
-ifpc
+ifpcMatrixIO
   :: (Ord w, Num w)
   => NewConstraint Int w
   -- ^ The new constraint to add.
@@ -171,19 +212,19 @@ ifpc
   -- ^ An APSP distance map between any two nodes.
   -> IO Bool
   -- ^ Returns an @IO@ of @True@ if consistent, otherwise @False@.
-ifpc (toUpdate@(src, tar), newWeight) m = do
+ifpcMatrixIO (toUpdate@(src, tar), newWeight) m = do
   w_ba <- m !@ (tar, src)
   w_ab <- m !@ (src, tar)
   if newWeight < negate w_ba
     -- We've just created an inconsistent network. Just return failure.
-    then return False
+    then pure False
     else if newWeight >= w_ab
       -- Our network is still the same, we don't need to update anything.
-      then return True
+      then pure True
       -- We have to propagate everything. This takes a while.
-      else apspIO >> return True
+      else apspIO >> pure True
  where
-  nodeRange = [0 .. width m - 1]
+  nodeRange = 0 ..< width m
   apspIO    = do
     -- Update the new weight in m
     writeAt m toUpdate newWeight
@@ -213,7 +254,7 @@ ifpc (toUpdate@(src, tar), newWeight) m = do
   -- Update the weights, and build the check sets.
 ifcpLoop1
   :: (Ord w, Num w) => Matrix (VM.IOVector w) -> [Int] -> IFPCContext -> IO ()
-ifcpLoop1 _ []       _       = return ()
+ifcpLoop1 _ []       _       = pure ()
 ifcpLoop1 m (k : ks) context = do
   let a         = srcNode context
       b         = tarNode context
@@ -238,8 +279,9 @@ ifcpLoop1 m (k : ks) context = do
 -- Update any weights from the checksets.
 ifcpLoop2
   :: (Ord w, Num w) => Matrix (VM.IOVector w) -> [(Int, Int)] -> Int -> IO ()
-ifcpLoop2 _ []                   _   = return ()
+ifcpLoop2 _ []                   _   = pure ()
 ifcpLoop2 m ((i, j) : remaining) src = do
+  -- Retrieve all the weights (technically these can be done in parallel).
   w_ia <- m !@ (i, src)
   w_aj <- m !@ (src, j)
   w_ij <- m !@ (i, j)
