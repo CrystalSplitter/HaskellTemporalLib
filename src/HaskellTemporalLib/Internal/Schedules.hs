@@ -11,7 +11,7 @@ import HaskellTemporalLib.Internal.Stn
   , ModifiableNet(..)
   )
 import HaskellTemporalLib.Internal.MinimalSTN (minimise, generalise)
-import HaskellTemporalLib.Internal.Graph.Graph (ifpc)
+import HaskellTemporalLib.Internal.Graph.Mut.VectorGraph (ifpc)
 
 
 -- | Assign an event in an STN.
@@ -48,7 +48,8 @@ smallestMakespanSchedule n = go $ smsFirstIter n
     where
       nextUnassigned         = head $ unassignedEvents stn
       nextUnassignedMinBound = negate <$> fst (zBcnst nextUnassigned stn)
-      newConstraintM = ((zEvent stn, nextUnassigned),) <$> nextUnassignedMinBound
+      newConstraintM = ((zEvent stn, nextUnassigned),)
+                        <$> nextUnassignedMinBound
       -- The lines below here can be replaced with any suitable
       -- partial minimasation.
       newWeights = newConstraintM >>= \x -> ifpc x (events stn) (toMap stn)
