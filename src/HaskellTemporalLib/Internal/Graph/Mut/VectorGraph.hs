@@ -2,6 +2,7 @@ module HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
   ( floydWarshall
   , ifpcMatrixIO
   , ifpc
+  , vertToIdxMap
   ) where
 
 import           Control.Monad                  ( forM_
@@ -13,20 +14,18 @@ import qualified Data.Map.Strict               as M'
 import           Data.Maybe                     ( fromMaybe )
 import qualified Data.Vector                   as V
 import qualified Data.Vector.Mutable           as VM
+import           HaskellTemporalLib.Internal.Graph.Matrix
+                                                ( (!@)
+                                                , Matrix(..)
+                                                , toList
+                                                , writeAt
+                                                , toMap
+                                                )
 import           System.IO.Unsafe
 
 ------------------------------------------------------------------------------
 -- Helper types.
 ------------------------------------------------------------------------------
-
-
-data Matrix v = Matrix
-  { width  :: Int
-  , height :: Int
-  , dat    :: v
-  }
-  deriving Show
-
 type NewConstraint v e = ((v, v), e)
 
 ------------------------------------------------------------------------------
@@ -36,25 +35,6 @@ type NewConstraint v e = ((v, v), e)
 (..<) :: (Enum a) => a -> a -> [a]
 x ..< y = [x .. pred y]
 infixr 5 ..<
-
-at :: Matrix (V.Vector a) -> (Int, Int) -> a
-at m (r, c) = dat m V.! (r * width m + c)
-
--- | Get a value at a specified (row, column).
-atIO :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
-atIO m (r, c) = dat m `VM.read` (r * width m + c)
-
--- | Infix alias of @atIO@
-(!@) :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
-m !@ e = atIO m e
-
-writeAt :: Matrix (VM.IOVector a) -> (Int, Int) -> a -> IO ()
-writeAt m (r, c) = VM.write (dat m) (r * width m + c)
-
--- | Convert a matrix to a list of row-column-distance values
-matrixToList :: Matrix (V.Vector dist) -> [((Int, Int), dist)]
-matrixToList m =
-  [ ((r, c), m `at` (r, c)) | c <- 0 ..< width m, r <- 0 ..< height m ]
 
 idxToNodeMap :: [a] -> M'.Map Int a
 idxToNodeMap xs = M'.fromList (zip [0 ..] xs)
@@ -80,11 +60,6 @@ writeWeight m wf ((ridx, r), (cidx, c)) = writeAt m (ridx, cidx) toWriteValue
  where
   toWriteValue = if ridx == cidx then 0.0 else fromMaybe inf (wf (r, c))
 
--- | Convert a Vector Matrix to an edge map.
-toMap :: (Ord v) => Matrix (V.Vector a) -> (Int -> v) -> M'.Map (v, v) a
-toMap m g = M'.fromList
-  [ ((g r, g c), m `at` (r, c)) | c <- 0 ..< width m, r <- 0 ..< height m ]
-
 -- ---------------------------------------------------------------------------
 -- Floyd Warshall Function
 -- ---------------------------------------------------------------------------
@@ -108,11 +83,11 @@ floydWarshallIO
   -> ((node, node) -> Maybe dist)
   -> IO (M'.Map (node, node) dist)
 floydWarshallIO es wf =
-  let numN = length es
+  let numN    = length es
       -- Range for each node index.
-      nIdx     = [0 .. numN - 1]
+      nIdx    = [0 .. numN - 1]
       -- Map of index to node.
-      nodeMap  = idxToNodeMap es
+      nodeMap = idxToNodeMap es
       doubleZippedEvents =
         [ (rtup, ctup) | ctup <- zip [0 ..] es, rtup <- zip [0 ..] es ]
   in  do
@@ -125,11 +100,9 @@ floydWarshallIO es wf =
                             [ (i, j, k) | k <- nIdx, i <- nIdx, j <- nIdx ]
         -- Freeze the vector and pack it back in.
         frozenVec <- V.freeze $ dat mat
-        let frozenMat = Matrix { width  = numN
-                               , height = numN
-                               , dat    = frozenVec
-                               }
-        return (M'.fromList (intListToNodes (matrixToList frozenMat) nodeMap))
+        let frozenMat =
+              Matrix { width = numN, height = numN, dat = frozenVec }
+        return (M'.fromList (intListToNodes (toList frozenMat) nodeMap))
 
 -- | Update a distance in the matrix.
 floydWarshallUpdate
@@ -167,6 +140,9 @@ data IFPCContext = IFPCContext
   , setJ    :: VM.IOVector Bool
   }
 
+vertToIdxMap :: (Foldable f, Ord v) => f v -> M'.Map v Int
+vertToIdxMap verts = M'.fromList (zip (F.toList verts) [0 ..])
+
 ifpc
   :: (Ord v, Ord w, Fractional w, Foldable f)
   => NewConstraint v w
@@ -175,14 +151,14 @@ ifpc
   -> Maybe (M'.Map (v, v) w)
 ifpc ((src, tar), w_prime) verts wf =
   let
-    vertToIndex v = M'.fromList (zip (F.toList verts) [0 ..]) M'.! v
     idxToVert i = V.fromList (F.toList verts) V.! i
     numVerts                     = length verts
     -- Create a matrix, freeze it, then convert to a map.
     (isConsistent, newWeightMat) = unsafePerformIO $ do
       vec <- VM.new (numVerts * numVerts)
-      let m                = Matrix numVerts numVerts vec
-          idxNewConstraint = ((vertToIndex src, vertToIndex tar), w_prime)
+      let m = Matrix numVerts numVerts vec
+          vertToIdx v = vertToIdxMap verts M'.! v
+          idxNewConstraint = ((vertToIdx src, vertToIdx tar), w_prime)
       -- Fill the matrix with the weight function.
       forM_ [ (a, b) | a <- 0 ..< numVerts, b <- 0 ..< numVerts ]
         $ \(r, c) -> do

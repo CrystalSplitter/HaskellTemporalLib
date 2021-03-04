@@ -23,6 +23,7 @@ library
     HaskellTemporalLib.Tools
     HaskellTemporalLib.Internal.Graph.Graph
     HaskellTemporalLib.Internal.Graph.Mut.VectorGraph
+    HaskellTemporalLib.Internal.Graph.Matrix
   -- other-extensions:
   other-modules:
     HaskellTemporalLib.Internal.MinimalSTN
