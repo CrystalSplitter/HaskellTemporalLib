@@ -7,13 +7,15 @@ module HaskellTemporalLib.Internal.Stn
   , inf
   , Constraint
   , Bidirectional
-  )
-where
+  ) where
 
+import           Data.List
 import qualified Data.Map                      as M
 import qualified Data.Map.Strict               as M'
 import           Data.Maybe
-import           Data.List
+import qualified Data.Vector                   as V
+import qualified HaskellTemporalLib.Internal.Graph.Matrix
+                                               as MX
 
 -- | A Bidirectional Linear Constraint.
 --
@@ -173,7 +175,16 @@ class SimpleTemporalNetwork net where
   fromMap z m = fromList z $ M.toList m
 
   -- | Convert the STN to a strict Map object.
-  toMap :: net event t -> M'.Map (event, event) t
+  toMap :: (Ord event) => net event t -> M'.Map (event, event) t
+
+  -- | Convert the STN to a distance matrix.
+  toMatrix
+    :: (Ord event, Fractional t)
+    => net event t
+    -> MX.Matrix (V.Vector t)
+  toMatrix net = MX.fromMap (toMap net) converter $ MX.CellMapper inf id
+    where converter v = M'.fromList (zip (events net) [0..]) M'.! v
+
 
 class (SimpleTemporalNetwork net) => ModifiableNet net where
   -- | Sets the constraint from the first event to the second event.
@@ -221,8 +232,8 @@ constrain
   -> t      -- ^ Minimum time between first and second events
   -> t      -- ^ Maximum time between first and second events
   -> [Constraint node t]  -- ^ Generated constraints which imply these bounds.
-constrain fr to minVal maxVal
-  = [((to, fr), negate minVal), ((fr, to), maxVal)]
+constrain fr to minVal maxVal =
+  [((to, fr), negate minVal), ((fr, to), maxVal)]
 
 
 -- | Utility function to enumerate nC2 items.

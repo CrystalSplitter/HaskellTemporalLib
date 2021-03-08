@@ -39,6 +39,7 @@ library
     , containers
     , mtl
     , vector
+    , primitive
   hs-source-dirs:
     src
   default-language:

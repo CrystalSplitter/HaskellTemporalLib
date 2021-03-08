@@ -6,6 +6,7 @@ module HaskellTemporalLib.Internal.Schedules
   )
 where
 
+import Control.Monad
 import HaskellTemporalLib.Internal.Stn
   ( SimpleTemporalNetwork(..)
   , ModifiableNet(..)
@@ -65,8 +66,7 @@ smsFirstIter m =
       mkspanM x = fmap negate (fst $ snd $ earliestMakespan x)
       newConstraintM = miniM >>= mkspanM
       finalEvent x = fst $ earliestMakespan x
-      -- Define some wrappers around assignEvent so it be used with Maybes
-      updateStn Nothing  _        = Nothing
-      updateStn _        Nothing  = Nothing
-      updateStn (Just c) (Just n) = Just $ assignEvent (finalEvent n) c n
-  in  updateStn newConstraintM $ generalise <$> miniM
+      -- Define some wrapper around assignEvent so it be used with Maybes
+      updateStnM cM nM = liftM2 updateStn cM nM
+      updateStn c n = assignEvent (finalEvent n) c n
+  in  updateStnM newConstraintM $ generalise <$> miniM

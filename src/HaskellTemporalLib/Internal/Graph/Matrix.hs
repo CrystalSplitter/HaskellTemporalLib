@@ -15,7 +15,10 @@ data Matrix v = Matrix
   deriving (Show, Eq)
 
 at :: Matrix (V.Vector a) -> (Int, Int) -> a
-at m (r, c) = dat m V.! (r * width m + c)
+at m edge = dat m V.! (m `idxAt` edge)
+
+idxAt :: Matrix (V.Vector a) -> (Int, Int) -> Int
+idxAt m (r, c) = r * width m + c
 
 -- | Get a value at a specified (row, column).
 atIO :: Matrix (VM.IOVector a) -> (Int, Int) -> IO a
@@ -35,6 +38,21 @@ toList m = [ ((r, c), m `at` (r, c)) | c <- wRange, r <- hRange ]
   wRange = [0 .. width m - 1]
   hRange = [0 .. height m - 1]
 
+-- | Convert an immutable to a mutable matrix safely.
+thaw
+  :: Matrix (V.Vector a)
+  -> IO (Matrix (VM.IOVector a))
+thaw mat = do
+  newDat <- V.thaw $ dat mat
+  pure mat { dat = newDat }
+
+-- | Convert a mutable matrix to an immutable matrix.
+freeze
+  :: Matrix (VM.IOVector a)
+  -> IO (Matrix (V.Vector a))
+freeze mat = do
+  newDat <- V.freeze $ dat mat
+  pure mat { dat = newDat }
 
 -- | Convert a Vector Matrix to an edge map.
 toMap :: (Ord v) => Matrix (V.Vector a) -> (Int -> v) -> M'.Map (v, v) a

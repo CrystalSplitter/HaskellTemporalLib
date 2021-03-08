@@ -22,6 +22,7 @@ instance (SimpleTemporalNetwork n) => SimpleTemporalNetwork (MinimalSTN n) where
   fromList z xs = MinimalSTN (fromList z xs)
   fromMap z m = MinimalSTN (fromMap z m)
   toMap (MinimalSTN net) = toMap net
+  toMatrix (MinimalSTN net) = toMatrix net
 
 
 -- | Remove minimisation guarantees and return the wrapped STN.
